@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { HUD_EASE, Rise, Stagger } from "@/components/motion/primitives";
+import { CoachLine } from "@/components/game/coach-line";
 import { Counter } from "@/components/game/counter";
 import { XPBar } from "@/components/game/xp-bar";
 import { TopBar } from "@/components/hud/top-bar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
+import { coachForType, coachLine, type Coach } from "@/lib/engine/coaches";
 import {
   STATS,
   type AvatarState,
@@ -25,14 +27,28 @@ export default function RecapPage({ params }: { params: { id: string } }) {
   const [run, setRun] = useState<Run | null>(null);
   const [template, setTemplate] = useState<WorkoutTemplate | null>(null);
   const [avatar, setAvatar] = useState<AvatarState | null>(null);
+  const [debrief, setDebrief] = useState<{ coach: Coach; line: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     (async () => {
       const r = await db().getRun(params.id);
       if (!r || r.status !== "completed" || !r.outcome) return router.replace("/");
       setRun(r);
-      setTemplate(await db().getTemplate(r.templateId));
+      const tpl = await db().getTemplate(r.templateId);
+      setTemplate(tpl);
       setAvatar(await db().getAvatar());
+      if (tpl) {
+        const coach = coachForType(tpl.type);
+        setDebrief({
+          coach,
+          line: coachLine(
+            coach.key,
+            r.outcome.flawless ? "recap_flawless" : "recap_partial",
+          ),
+        });
+      }
     })();
   }, [params.id, router]);
 
@@ -97,6 +113,18 @@ export default function RecapPage({ params }: { params: { id: string } }) {
             </div>
           </Panel>
         </Rise>
+
+        {/* ── DEBRIEF DU HANDLER ── */}
+        {debrief && (
+          <Rise>
+            <CoachLine
+              coach={debrief.coach}
+              line={debrief.line}
+              label="Debrief"
+              delay={1.0}
+            />
+          </Rise>
+        )}
 
         {/* ── LEVEL UPS ── */}
         {outcome.levelUps.map((lu, i) => (

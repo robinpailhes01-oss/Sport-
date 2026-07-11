@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Rise, Stagger } from "@/components/motion/primitives";
+import { CoachBadge } from "@/components/game/coach-badge";
 import { Counter } from "@/components/game/counter";
 import { StatRadar } from "@/components/game/stat-radar";
 import { StatRow } from "@/components/game/stat-row";
@@ -10,6 +11,7 @@ import { TopBar } from "@/components/hud/top-bar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
+import { COACHES } from "@/lib/engine/coaches";
 import { STAT_KEYS, STATS, type AvatarState, type Run } from "@/lib/engine/types";
 import { formatXp } from "@/lib/utils";
 
@@ -92,6 +94,17 @@ export default function DashboardPage() {
                   delay={0.3 + i * 0.1}
                 />
               ))}
+            </div>
+          </Panel>
+        </Rise>
+
+        {/* ── HANDLERS ── */}
+        <Rise>
+          <Panel className="p-4">
+            <p className="hud-label mb-3">Handlers — ils signent tes programmes</p>
+            <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2">
+              <CoachBadge coach={COACHES.goggins} />
+              <CoachBadge coach={COACHES.robbins} />
             </div>
           </Panel>
         </Rise>

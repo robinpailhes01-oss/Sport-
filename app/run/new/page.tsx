@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { HUD_EASE, Rise, Stagger } from "@/components/motion/primitives";
+import { CoachLine } from "@/components/game/coach-line";
 import { ModifierCard } from "@/components/game/modifier-card";
 import { RiskSelector } from "@/components/game/risk-selector";
 import { TopBar } from "@/components/hud/top-bar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
+import { coachForType, coachLine, type Coach } from "@/lib/engine/coaches";
 import {
   STATS,
   WORKOUT_TYPE_LABELS,
@@ -24,6 +26,7 @@ export default function NewRunPage() {
   const [selected, setSelected] = useState<WorkoutTemplate | null>(null);
   const [riskTier, setRiskTier] = useState(0);
   const [run, setRun] = useState<Run | null>(null);
+  const [brief, setBrief] = useState<{ coach: Coach; line: string } | null>(null);
   const [engaging, setEngaging] = useState(false);
 
   useEffect(() => {
@@ -37,6 +40,8 @@ export default function NewRunPage() {
       : await db().rollRun(selected.id, riskTier);
     // force le remount des cartes pour rejouer l'animation de tirage
     setRun({ ...rolled, modifiers: [...rolled.modifiers] });
+    const coach = coachForType(selected.type);
+    setBrief({ coach, line: coachLine(coach.key, "brief") });
   }
 
   async function engage() {
@@ -83,7 +88,16 @@ export default function NewRunPage() {
                     </p>
                     <p className="mt-0.5 font-mono text-[10px] tracking-micro text-ink-mute">
                       {WORKOUT_TYPE_LABELS[tpl.type].toUpperCase()} · {tpl.durationMin}′
-                      · {tpl.baseXp} XP
+                      · {tpl.baseXp} XP ·{" "}
+                      <span
+                        className={
+                          coachForType(tpl.type).accent === "danger"
+                            ? "text-danger/80"
+                            : "text-zone2/80"
+                        }
+                      >
+                        {coachForType(tpl.type).codename}
+                      </span>
                     </p>
                   </div>
                   <span className="shrink-0 text-lg" aria-hidden>
@@ -134,6 +148,18 @@ export default function NewRunPage() {
             )}
           </AnimatePresence>
         </Rise>
+
+        {/* ── BRIEF DU HANDLER ── */}
+        {run && brief && (
+          <Rise>
+            <CoachLine
+              coach={brief.coach}
+              line={brief.line}
+              label="Brief"
+              delay={0.6}
+            />
+          </Rise>
+        )}
 
         {/* ── ACTIONS ── */}
         <Rise className="space-y-2 pt-2">
