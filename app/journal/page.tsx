@@ -5,9 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { HUD_EASE, Rise, Stagger } from "@/components/motion/primitives";
 import { TopBar } from "@/components/hud/top-bar";
+import { ShareButton } from "@/components/share/share-button";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
+import { PROTOCOL_DAYS } from "@/lib/engine/season";
 import {
   HABITS,
   SAVINGS_GOAL,
@@ -132,6 +134,27 @@ export default function JournalPage() {
             })}
           </Panel>
         </Rise>
+
+        {/* ── PARTAGE RÉCUP ── */}
+        {checkedToday.includes("recup-outils") && (
+          <Rise>
+            <Panel className="space-y-3 p-4">
+              <p className="hud-label">❄️ Récup faite — partage-la</p>
+              <ShareButton
+                payload={{
+                  kind: "recovery",
+                  title: "Récup active",
+                  day: avatar.dayIndex,
+                  totalDays: PROTOCOL_DAYS,
+                  dateLabel: new Date().toLocaleDateString("fr-FR", {
+                    day: "numeric",
+                    month: "long",
+                  }),
+                }}
+              />
+            </Panel>
+          </Rise>
+        )}
 
         {/* ── ÉPARGNE ── */}
         <Rise>

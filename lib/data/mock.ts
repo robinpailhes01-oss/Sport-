@@ -1,6 +1,7 @@
 import { rollModifiers } from "@/lib/engine/run-generator";
 import { computeOutcome } from "@/lib/engine/scoring";
 import { statStateFromXp } from "@/lib/engine/xp";
+import { agentReply, type CommsMessage } from "@/lib/engine/comms";
 import {
   FULL_JOURNAL_BONUS,
   HABITS,
@@ -8,6 +9,7 @@ import {
   formatEuro,
   habitByKey,
 } from "@/lib/engine/habits";
+import { STATS } from "@/lib/engine/types";
 import {
   STAT_KEYS,
   type AvatarState,
@@ -51,9 +53,11 @@ interface SaveState {
   /** date → clés déjà créditées en XP (anti-farming du toggle) */
   journalGranted: Record<string, string[]>;
   savings: SavingsEntry[];
+  comms: CommsMessage[];
   nextEventId: number;
   nextRecordId: number;
   nextSavingsId: number;
+  nextCommsId: number;
 }
 
 // Implémentation mock : in-memory + localStorage, 100% client.
@@ -85,6 +89,8 @@ export class MockDataSource implements DataSource {
             state.savings = seeded.savings;
             state.nextSavingsId = seeded.nextSavingsId;
           }
+          state.comms ??= [];
+          state.nextCommsId ??= 1;
           return state;
         }
       } catch {
@@ -151,9 +157,11 @@ export class MockDataSource implements DataSource {
       journal,
       journalGranted: { ...journal },
       savings,
+      comms: [],
       nextEventId: id,
       nextRecordId,
       nextSavingsId,
+      nextCommsId: 1,
     };
   }
 
@@ -467,6 +475,52 @@ export class MockDataSource implements DataSource {
     });
     this.persist();
     return entry;
+  }
+
+  async listComms(): Promise<CommsMessage[]> {
+    return [...this.state.comms];
+  }
+
+  async sendComms(text: string, mood: number): Promise<CommsMessage[]> {
+    const now = new Date().toISOString();
+    const mine: CommsMessage = {
+      id: this.state.nextCommsId++,
+      author: "me",
+      text,
+      mood,
+      createdAt: now,
+    };
+
+    // Contexte mémoire pour la réponse de l'agent
+    const myEntries = this.state.comms.filter((m) => m.author === "me");
+    const lastLow = [...myEntries]
+      .reverse()
+      .find((m) => (m.mood ?? 3) <= 2);
+    const lastLowMoodDaysAgo = lastLow
+      ? Math.floor(
+          (Date.now() - Date.parse(lastLow.createdAt)) / (24 * 3600 * 1000),
+        )
+      : null;
+    const weekly = await this.getWeeklyXp(1);
+    const weakStat = STAT_KEYS.reduce((a, b) =>
+      weekly[a][0] <= weekly[b][0] ? a : b,
+    );
+
+    const reply = agentReply(text, mood, {
+      entryCount: myEntries.length,
+      lastLowMoodDaysAgo,
+      weakStatLabel: STATS[weakStat].label,
+    });
+    const theirs: CommsMessage = {
+      id: this.state.nextCommsId++,
+      author: reply.author,
+      text: reply.text,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.state.comms.push(mine, theirs);
+    this.persist();
+    return [...this.state.comms];
   }
 
   private mustGetRun(runId: string): Run {

@@ -9,9 +9,11 @@ import { CoachLine } from "@/components/game/coach-line";
 import { Counter } from "@/components/game/counter";
 import { XPBar } from "@/components/game/xp-bar";
 import { TopBar } from "@/components/hud/top-bar";
+import { ShareButton } from "@/components/share/share-button";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
+import { PROTOCOL_DAYS } from "@/lib/engine/season";
 import { coachForType, coachLine, type Coach } from "@/lib/engine/coaches";
 import {
   STATS,
@@ -180,6 +182,30 @@ export default function RecapPage({ params }: { params: { id: string } }) {
                 </div>
               );
             })}
+          </Panel>
+        </Rise>
+
+        {/* ── PARTAGE ── */}
+        <Rise>
+          <Panel className="space-y-3 p-4">
+            <p className="hud-label">Partager la win</p>
+            <ShareButton
+              payload={{
+                kind: "run",
+                title: template.title,
+                xp: outcome.totalXp,
+                flawless: outcome.flawless,
+                multiplier: outcome.multiplier,
+                day: avatar.dayIndex,
+                totalDays: PROTOCOL_DAYS,
+                dateLabel: new Date(
+                  run.completedAt ?? Date.now(),
+                ).toLocaleDateString("fr-FR", {
+                  day: "numeric",
+                  month: "long",
+                }),
+              }}
+            />
           </Panel>
         </Rise>
 

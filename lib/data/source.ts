@@ -1,3 +1,4 @@
+import type { CommsMessage } from "@/lib/engine/comms";
 import type {
   AvatarState,
   PersonalRecord,
@@ -39,6 +40,10 @@ export interface DataSource {
 
   getSavings(): Promise<{ total: number; entries: SavingsEntry[] }>;
   addSaving(amount: number, date: string): Promise<SavingsEntry>;
+
+  /** Fil COMMS — l'opérateur parle, un agent répond, tout est consigné */
+  listComms(): Promise<CommsMessage[]>;
+  sendComms(text: string, mood: number): Promise<CommsMessage[]>;
 
   /** Crée un run et tire ses modifiers pour le risk tier donné */
   rollRun(templateId: string, riskTier: number): Promise<Run>;
