@@ -179,11 +179,7 @@ export async function generateShareCard(
 
   ctx.fillStyle = INK_DIM;
   ctx.font = `500 32px ${mono}`;
-  ctx.fillText(
-    `${payload.dateLabel.toUpperCase()}  ·  PROTOCOLE 90 JOURS`,
-    M,
-    y,
-  );
+  ctx.fillText(payload.dateLabel.toUpperCase(), M, y);
 
   // ── ticks de coin ──
   corner(ctx, 40, 40, 1, 1);

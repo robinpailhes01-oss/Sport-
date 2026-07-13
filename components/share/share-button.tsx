@@ -10,16 +10,28 @@ import {
   type SharePayload,
 } from "@/lib/share/card";
 
-/** Génère la carte story 1080×1920 (photo optionnelle) puis ouvre la share sheet. */
+/**
+ * Génère la carte story 1080×1920 (photo optionnelle) puis ouvre la share sheet.
+ * Titre et légende sont éditables avant génération.
+ */
 export function ShareButton({ payload }: { payload: SharePayload }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [title, setTitle] = useState(payload.title);
+  const [detail, setDetail] = useState(payload.detail ?? "");
 
   async function generate(photo?: File) {
     setBusy(true);
     try {
-      const blob = await generateShareCard(payload, photo);
+      const blob = await generateShareCard(
+        {
+          ...payload,
+          title: title.trim() || payload.title,
+          detail: detail.trim() || undefined,
+        },
+        photo,
+      );
       setPreview((old) => {
         if (old) URL.revokeObjectURL(old);
         return URL.createObjectURL(blob);
@@ -32,6 +44,27 @@ export function ShareButton({ payload }: { payload: SharePayload }) {
 
   return (
     <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="hud-label mb-1 block">Titre</span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={26}
+            className="h-10 w-full border border-line bg-void px-3 font-display text-xs font-bold uppercase tracking-wide text-ink outline-none transition-colors focus:border-volt"
+          />
+        </label>
+        <label className="block">
+          <span className="hud-label mb-1 block">Légende</span>
+          <input
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            maxLength={38}
+            placeholder="6h12 · avant la chaleur"
+            className="h-10 w-full border border-line bg-void px-3 font-mono text-xs text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-volt"
+          />
+        </label>
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <Button
           variant="ghost"
