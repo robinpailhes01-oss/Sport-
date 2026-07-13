@@ -27,27 +27,46 @@ function isoDay(offset: number): string {
     .slice(0, 10);
 }
 
+function frDayLabel(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
 export default function JournalPage() {
   const [avatar, setAvatar] = useState<AvatarState | null>(null);
   const [journal, setJournal] = useState<Record<string, string[]>>({});
+  const [validated, setValidated] = useState<string[]>([]);
   const [savings, setSavings] = useState<{
     total: number;
     entries: SavingsEntry[];
   } | null>(null);
   const [amount, setAmount] = useState("");
+  // remplissage du lendemain matin : on peut éditer AUJOURD'HUI ou HIER
+  const [dayOffset, setDayOffset] = useState<0 | 1>(0);
 
   const today = isoDay(0);
-  const checkedToday = journal[today] ?? [];
+  const selectedIso = isoDay(dayOffset);
+  const checkedToday = journal[selectedIso] ?? [];
+  const isValidated = validated.includes(selectedIso);
 
   useEffect(() => {
     db().getAvatar().then(setAvatar);
     db().getJournal(GRID_DAYS).then(setJournal);
     db().getSavings().then(setSavings);
+    db().listValidatedDays().then(setValidated);
   }, []);
 
   async function toggle(habitKey: string) {
-    const day = await db().toggleHabit(today, habitKey);
-    setJournal((prev) => ({ ...prev, [today]: day }));
+    const day = await db().toggleHabit(selectedIso, habitKey);
+    setJournal((prev) => ({ ...prev, [selectedIso]: day }));
+  }
+
+  async function validate() {
+    await db().validateJournal(selectedIso);
+    setValidated(await db().listValidatedDays());
   }
 
   const parsedAmount = useMemo(() => {
@@ -78,12 +97,37 @@ export default function JournalPage() {
           </h1>
         </Rise>
 
+        {/* ── SÉLECTEUR DE JOUR ── */}
+        <Rise>
+          <div className="grid grid-cols-2 gap-2">
+            {([0, 1] as const).map((offset) => {
+              const selected = dayOffset === offset;
+              return (
+                <button
+                  key={offset}
+                  type="button"
+                  onClick={() => setDayOffset(offset)}
+                  className={cn(
+                    "border py-2.5 font-display text-xs font-bold uppercase tracking-wider transition-colors",
+                    selected
+                      ? "border-volt bg-volt-faint text-volt"
+                      : "border-line text-ink-mute hover:border-line-bright",
+                  )}
+                >
+                  {offset === 0 ? "Aujourd'hui" : "Hier"}
+                </button>
+              );
+            })}
+          </div>
+        </Rise>
+
         {/* ── HABITUDES DU JOUR ── */}
         <Rise>
           <Panel tone="volt" className="space-y-2 p-4">
             <div className="mb-1 flex items-baseline justify-between">
-              <p className="hud-label">Aujourd&apos;hui</p>
+              <p className="hud-label capitalize">{frDayLabel(selectedIso)}</p>
               <p className="font-mono text-[10px] tracking-micro text-ink-mute">
+                {isValidated && <span className="text-volt">VALIDÉ ✓ · </span>}
                 {checkedToday.length}/{HABITS.length}
               </p>
             </div>
@@ -132,6 +176,17 @@ export default function JournalPage() {
                 </motion.button>
               );
             })}
+            <div className="pt-1">
+              {isValidated ? (
+                <p className="border border-volt/50 bg-volt-faint px-3 py-2.5 text-center font-mono text-[11px] tracking-micro text-volt">
+                  JOURNAL VALIDÉ — JOURNÉE CLÔTURÉE ✓
+                </p>
+              ) : (
+                <Button size="md" className="w-full" onClick={validate}>
+                  Valider le journal {dayOffset === 1 ? "d'hier" : "du jour"}
+                </Button>
+              )}
+            </div>
           </Panel>
         </Rise>
 

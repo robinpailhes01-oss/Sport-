@@ -37,6 +37,9 @@ export interface DataSource {
   /** Habitudes cochées par date (ISO yyyy-mm-dd → clés d'habitudes) */
   getJournal(days: number): Promise<Record<string, string[]>>;
   toggleHabit(date: string, habitKey: string): Promise<string[]>;
+  /** Jours dont le journal a été explicitement validé */
+  listValidatedDays(): Promise<string[]>;
+  validateJournal(date: string): Promise<void>;
 
   getSavings(): Promise<{ total: number; entries: SavingsEntry[] }>;
   addSaving(amount: number, date: string): Promise<SavingsEntry>;

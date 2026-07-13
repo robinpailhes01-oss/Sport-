@@ -52,6 +52,8 @@ interface SaveState {
   journal: Record<string, string[]>;
   /** date → clés déjà créditées en XP (anti-farming du toggle) */
   journalGranted: Record<string, string[]>;
+  /** dates dont le journal a été validé (clôture explicite de la journée) */
+  journalValidated: Record<string, boolean>;
   savings: SavingsEntry[];
   comms: CommsMessage[];
   nextEventId: number;
@@ -91,6 +93,7 @@ export class MockDataSource implements DataSource {
           }
           state.comms ??= [];
           state.nextCommsId ??= 1;
+          state.journalValidated ??= {};
           return state;
         }
       } catch {
@@ -156,6 +159,7 @@ export class MockDataSource implements DataSource {
       seaDays: [],
       journal,
       journalGranted: { ...journal },
+      journalValidated: {},
       savings,
       comms: [],
       nextEventId: id,
@@ -446,6 +450,26 @@ export class MockDataSource implements DataSource {
     }
     this.persist();
     return [...day];
+  }
+
+  async listValidatedDays(): Promise<string[]> {
+    return Object.keys(this.state.journalValidated).filter(
+      (d) => this.state.journalValidated[d],
+    );
+  }
+
+  async validateJournal(date: string): Promise<void> {
+    if (this.state.journalValidated[date]) return;
+    this.state.journalValidated[date] = true;
+    this.state.xpEvents.push({
+      id: this.state.nextEventId++,
+      stat: "discipline",
+      amount: 5,
+      source: "checkin",
+      reason: "Journal validé — journée clôturée",
+      createdAt: new Date().toISOString(),
+    });
+    this.persist();
   }
 
   async getSavings(): Promise<{ total: number; entries: SavingsEntry[] }> {

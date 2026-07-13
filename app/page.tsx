@@ -21,6 +21,7 @@ import {
   weekdayIndex,
   type DayPlan,
 } from "@/lib/engine/program";
+import { adviseMission, type MissionAdvice } from "@/lib/engine/mission-advisor";
 import { PROTOCOL_DAYS, phaseForDay } from "@/lib/engine/season";
 import {
   STAT_KEYS,
@@ -39,16 +40,19 @@ export default function DashboardPage() {
     template: WorkoutTemplate;
     todayIsSea: boolean;
     shifted: boolean;
+    advice: MissionAdvice | null;
+    plannedTitle?: string;
   } | null>(null);
+  const [keepPlanned, setKeepPlanned] = useState(false);
   const [journalToday, setJournalToday] = useState<string[]>([]);
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [analystHeadline, setAnalystHeadline] = useState<string | null>(null);
 
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  // La mission du jour glisse d'un cran par jour de mer déclaré cette semaine —
-  // le protocole reprend là où il s'est arrêté, le streak ne bouge pas.
-  async function refreshMission() {
+  // La mission du jour glisse d'un cran par jour de mer déclaré cette semaine,
+  // puis passe au filtre du ressenti (dernier état consigné dans COMMS).
+  async function refreshMission(keepPlannedOverride = keepPlanned) {
     const now = new Date();
     const weekday = weekdayIndex(now);
     const seaDays = await db().listSeaDays();
@@ -61,9 +65,36 @@ export default function DashboardPage() {
     ).length;
     const planIndex = Math.max(0, weekday - seaBefore);
     const plan = planForDayIndex(planIndex, now);
-    const template = await db().getTemplateBySlug(plan.resolvedSlug);
-    if (template)
-      setMission({ plan, template, todayIsSea, shifted: seaBefore > 0 });
+    const planned = await db().getTemplateBySlug(plan.resolvedSlug);
+    if (!planned) return;
+
+    const comms = await db().listComms();
+    const lastMine = [...comms].reverse().find((m) => m.author === "me");
+    const signal =
+      lastMine?.mood !== undefined
+        ? {
+            mood: lastMine.mood,
+            ageHours:
+              (Date.now() - Date.parse(lastMine.createdAt)) / 3_600_000,
+          }
+        : null;
+    const advice = keepPlannedOverride
+      ? { slug: plan.resolvedSlug }
+      : adviseMission(plan.resolvedSlug, planned.type, signal);
+
+    const template =
+      advice.slug === plan.resolvedSlug
+        ? planned
+        : (await db().getTemplateBySlug(advice.slug)) ?? planned;
+
+    setMission({
+      plan,
+      template,
+      todayIsSea,
+      shifted: seaBefore > 0,
+      advice,
+      plannedTitle: planned.title,
+    });
   }
 
   useEffect(() => {
@@ -143,11 +174,11 @@ export default function DashboardPage() {
         {/* ── RUN EN COURS / MISSION DU JOUR ── */}
         <Rise>
           {activeRun ? (
-            <Link
-              href={activeRun.status === "active" ? `/run/${activeRun.id}` : "/run/new"}
-              className="block"
-            >
-              <Panel tone="danger" className="flex items-center justify-between p-4">
+            <Panel tone="danger" className="space-y-3 p-4">
+              <Link
+                href={activeRun.status === "active" ? `/run/${activeRun.id}` : "/run/new"}
+                className="flex items-center justify-between"
+              >
                 <div>
                   <p className="hud-label mb-1 text-danger">
                     Run {activeRun.status === "active" ? "en cours" : "armé"}
@@ -157,8 +188,18 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <span className="h-2 w-2 animate-pulse-live rounded-full bg-danger" />
-              </Panel>
-            </Link>
+              </Link>
+              <button
+                type="button"
+                onClick={async () => {
+                  await db().abandonRun(activeRun.id);
+                  setActiveRun(await db().getActiveRun());
+                }}
+                className="block w-full text-center font-mono text-[10px] tracking-micro text-ink-mute transition-colors hover:text-danger"
+              >
+                ✕ ANNULER CE RUN — AUCUN XP
+              </button>
+            </Panel>
           ) : mission?.todayIsSea ? (
             <Panel className="space-y-3 border-zone2/30 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -191,7 +232,9 @@ export default function DashboardPage() {
                     {mission.template.title}
                   </p>
                   <p className="mt-0.5 text-xs text-ink-dim">
-                    {mission.plan.intent}
+                    {mission.advice?.swappedFromSlug
+                      ? "Séance ajustée à ton ressenti du jour"
+                      : mission.plan.intent}
                   </p>
                 </div>
                 <span
@@ -205,6 +248,43 @@ export default function DashboardPage() {
                   {coachForType(mission.template.type).codename}
                 </span>
               </div>
+              {/* Le conseil du matin — la voix qui a ajusté (ou salué) la mission */}
+              {mission.advice?.note && (
+                <div
+                  className={cn(
+                    "border-l-2 py-2 pl-3 pr-2",
+                    mission.advice.note.author === "robbins"
+                      ? "border-zone2"
+                      : "border-danger",
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "hud-label mb-0.5",
+                      mission.advice.note.author === "robbins"
+                        ? "text-zone2"
+                        : "text-danger",
+                    )}
+                  >
+                    {COACHES[mission.advice.note.author].codename}
+                  </p>
+                  <p className="text-xs leading-snug text-ink-dim">
+                    {mission.advice.note.text}
+                  </p>
+                  {mission.advice.swappedFromSlug && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKeepPlanned(true);
+                        refreshMission(true);
+                      }}
+                      className="mt-1.5 font-mono text-[10px] tracking-micro text-ink-mute transition-colors hover:text-ink-dim"
+                    >
+                      GARDER {mission.plannedTitle?.toUpperCase()} →
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="mb-1">
                 <WeekStrip todayIndex={weekdayIndex(new Date())} />
               </div>
