@@ -67,12 +67,14 @@ export const WEEK_PROTOCOL: DayPlan[] = [
   },
 ];
 
-// Contraintes réelles de l'opérateur : capitaine de bateau, saison chargée,
-// forte chaleur. Le protocole plie, il ne casse pas.
+// Contraintes réelles de l'opérateur : capitaine de bateau — des jours de mer
+// sans entraînement possible, et forte chaleur dehors. Le protocole plie,
+// il ne casse pas : règles de re-priorisation quand la semaine est coupée.
 export const PROTOCOL_NOTES: string[] = [
   "Chaleur : cardio tôt le matin, sinon version salle (tapis, air bike, rameur) — chaque séance a son option.",
-  "Journée chargée : coupe à 30–40′ en gardant les blocs A/B. Court > zéro.",
-  "Pas de sled à bord ou en salle : remplacements prévus dans la séance Hyrox.",
+  "Jour de mer = jour OFF assumé : zéro culpabilité, la mission du lendemain reprend le protocole là où il est.",
+  "Semaine coupée à 4 jours : garder Force A · VO2max · Seuil · Hyrox Engine.",
+  "Semaine coupée à 3 jours : Force A · VO2max · Hyrox Engine — la Z2 et le skill sautent en premier, jamais la force ni l'intensité.",
 ];
 
 function isoWeekIndex(date: Date): number {

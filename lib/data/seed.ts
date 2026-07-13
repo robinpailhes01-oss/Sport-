@@ -108,9 +108,9 @@ export const TEMPLATES: WorkoutTemplate[] = [
     baseXp: 150,
     blocks: [
       { name: "Round 1–4", detail: "4 × (800 m run + 20 m sled push + 20 m sled pull)" },
+      { name: "Sled", detail: "Push lourd (~1.5×BW chargé), pull en marche arrière contrôlée" },
       { name: "Compromis", detail: "Chaque run DOIT rester sous contrôle — pacing Hyrox" },
       { name: "Finisher", detail: "60 wall balls — fractionnement imposé max 15" },
-      { name: "Sans sled", detail: "→ 20 m walking lunges lestées + 15 cal rameur par round" },
     ],
   },
   {
