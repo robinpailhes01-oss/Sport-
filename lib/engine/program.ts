@@ -81,10 +81,22 @@ function isoWeekIndex(date: Date): number {
   return Math.floor(date.getTime() / (7 * 24 * 3600 * 1000));
 }
 
-/** Plan du jour, avec l'alternance hebdo résolue (semaine paire → alt). */
-export function planForDate(date: Date): DayPlan & { resolvedSlug: string } {
-  const day = (date.getDay() + 6) % 7; // JS: 0 = dimanche → 6
-  const plan = WEEK_PROTOCOL[day];
-  const useAlt = plan.altTemplateSlug && isoWeekIndex(date) % 2 === 0;
+/** Plan d'un jour du protocole (0 = lundi), alternance hebdo résolue par la date. */
+export function planForDayIndex(
+  dayIndex: number,
+  refDate: Date,
+): DayPlan & { resolvedSlug: string } {
+  const plan = WEEK_PROTOCOL[Math.max(0, Math.min(6, dayIndex))];
+  const useAlt = plan.altTemplateSlug && isoWeekIndex(refDate) % 2 === 0;
   return { ...plan, resolvedSlug: useAlt ? plan.altTemplateSlug! : plan.templateSlug };
+}
+
+/** Plan du jour calendaire. */
+export function planForDate(date: Date): DayPlan & { resolvedSlug: string } {
+  return planForDayIndex(weekdayIndex(date), date);
+}
+
+/** 0 = lundi … 6 = dimanche */
+export function weekdayIndex(date: Date): number {
+  return (date.getDay() + 6) % 7;
 }

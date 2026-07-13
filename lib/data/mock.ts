@@ -2,11 +2,19 @@ import { rollModifiers } from "@/lib/engine/run-generator";
 import { computeOutcome } from "@/lib/engine/scoring";
 import { statStateFromXp } from "@/lib/engine/xp";
 import {
+  FULL_JOURNAL_BONUS,
+  HABITS,
+  SAVINGS_XP,
+  formatEuro,
+  habitByKey,
+} from "@/lib/engine/habits";
+import {
   STAT_KEYS,
   type AvatarState,
   type PersonalRecord,
   type Run,
   type RunPerformance,
+  type SavingsEntry,
   type StatKey,
   type StatState,
   type WorkoutTemplate,
@@ -36,8 +44,16 @@ interface SaveState {
   xpEvents: XpEvent[];
   runs: Run[];
   records: PersonalRecord[];
+  /** ISO yyyy-mm-dd des jours de mer déclarés */
+  seaDays: string[];
+  /** date → clés d'habitudes cochées */
+  journal: Record<string, string[]>;
+  /** date → clés déjà créditées en XP (anti-farming du toggle) */
+  journalGranted: Record<string, string[]>;
+  savings: SavingsEntry[];
   nextEventId: number;
   nextRecordId: number;
+  nextSavingsId: number;
 }
 
 // Implémentation mock : in-memory + localStorage, 100% client.
@@ -55,11 +71,19 @@ export class MockDataSource implements DataSource {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const state = JSON.parse(raw) as SaveState;
-          // migration des vieilles sauvegardes (avant le tracker de PR)
+          // migrations douces des vieilles sauvegardes
           if (!state.records) {
             const seeded = this.seedRecords();
             state.records = seeded.records;
             state.nextRecordId = seeded.nextRecordId;
+          }
+          state.seaDays ??= [];
+          state.journal ??= this.seedJournal();
+          state.journalGranted ??= { ...state.journal };
+          if (!state.savings) {
+            const seeded = this.seedSavings();
+            state.savings = seeded.savings;
+            state.nextSavingsId = seeded.nextSavingsId;
           }
           return state;
         }
@@ -117,7 +141,56 @@ export class MockDataSource implements DataSource {
       events.push({ ...e, id: id++ });
     }
     const { records, nextRecordId } = this.seedRecords();
-    return { xpEvents: events, runs: [], records, nextEventId: id, nextRecordId };
+    const { savings, nextSavingsId } = this.seedSavings();
+    const journal = this.seedJournal();
+    return {
+      xpEvents: events,
+      runs: [],
+      records,
+      seaDays: [],
+      journal,
+      journalGranted: { ...journal },
+      savings,
+      nextEventId: id,
+      nextRecordId,
+      nextSavingsId,
+    };
+  }
+
+  // Démo : quelques jours de journal déjà remplis + un début d'épargne.
+  // À écraser par la vraie vie dès le premier jour d'usage.
+  private seedJournal(): Record<string, string[]> {
+    const journal: Record<string, string[]> = {};
+    const patterns = [
+      ["sans-alcool", "lecture"],
+      ["sans-alcool", "visualisation", "lecture"],
+      ["sans-alcool"],
+      ["sans-alcool", "visualisation", "lecture"],
+      ["lecture", "visualisation"],
+    ];
+    for (let i = 1; i <= patterns.length; i++) {
+      const date = new Date(Date.now() - i * 24 * 3600 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      journal[date] = patterns[i - 1];
+    }
+    return journal;
+  }
+
+  private seedSavings(): { savings: SavingsEntry[]; nextSavingsId: number } {
+    let id = 1;
+    const savings: SavingsEntry[] = [
+      [500, 40],
+      [450, 22],
+      [300, 6],
+    ].map(([amount, ago]) => ({
+      id: id++,
+      amount,
+      date: new Date(Date.now() - ago * 24 * 3600 * 1000)
+        .toISOString()
+        .slice(0, 10),
+    }));
+    return { savings, nextSavingsId: id };
   }
 
   private persist() {
@@ -299,6 +372,101 @@ export class MockDataSource implements DataSource {
     }
     this.persist();
     return { record, prevBest };
+  }
+
+  async listSeaDays(): Promise<string[]> {
+    return [...this.state.seaDays];
+  }
+
+  async toggleSeaDay(date: string): Promise<string[]> {
+    const idx = this.state.seaDays.indexOf(date);
+    if (idx >= 0) this.state.seaDays.splice(idx, 1);
+    else this.state.seaDays.push(date);
+    this.persist();
+    return [...this.state.seaDays];
+  }
+
+  async getJournal(days: number): Promise<Record<string, string[]>> {
+    const out: Record<string, string[]> = {};
+    for (let i = 0; i < days; i++) {
+      const date = new Date(Date.now() - i * 24 * 3600 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      out[date] = this.state.journal[date] ?? [];
+    }
+    return out;
+  }
+
+  async toggleHabit(date: string, habitKey: string): Promise<string[]> {
+    const habit = habitByKey(habitKey);
+    if (!habit) throw new Error(`Habitude inconnue: ${habitKey}`);
+
+    const day = (this.state.journal[date] ??= []);
+    const idx = day.indexOf(habitKey);
+    if (idx >= 0) {
+      day.splice(idx, 1);
+    } else {
+      day.push(habitKey);
+      // XP à la première coche du jour uniquement — décocher ne rembourse pas,
+      // recocher ne recrédite pas.
+      const granted = (this.state.journalGranted[date] ??= []);
+      if (!granted.includes(habitKey)) {
+        granted.push(habitKey);
+        this.state.xpEvents.push({
+          id: this.state.nextEventId++,
+          stat: habit.stat,
+          amount: habit.xp,
+          source: "checkin",
+          reason: `Journal — ${habit.label}`,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      if (
+        day.length === HABITS.length &&
+        !granted.includes("__full__")
+      ) {
+        granted.push("__full__");
+        this.state.xpEvents.push({
+          id: this.state.nextEventId++,
+          stat: "discipline",
+          amount: FULL_JOURNAL_BONUS,
+          source: "checkin",
+          reason: "Journal complet — toutes les habitudes tenues",
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+    this.persist();
+    return [...day];
+  }
+
+  async getSavings(): Promise<{ total: number; entries: SavingsEntry[] }> {
+    const entries = [...this.state.savings].sort((a, b) =>
+      b.date.localeCompare(a.date),
+    );
+    return {
+      total: this.state.savings.reduce((s, e) => s + e.amount, 0),
+      entries,
+    };
+  }
+
+  async addSaving(amount: number, date: string): Promise<SavingsEntry> {
+    const entry: SavingsEntry = {
+      id: this.state.nextSavingsId++,
+      amount,
+      date,
+    };
+    this.state.savings.push(entry);
+    this.state.xpEvents.push({
+      id: this.state.nextEventId++,
+      stat: "discipline",
+      amount: SAVINGS_XP,
+      source: "checkin",
+      reason: `Épargne — ${formatEuro(amount)} de côté`,
+      createdAt: new Date().toISOString(),
+    });
+    this.persist();
+    return entry;
   }
 
   private mustGetRun(runId: string): Run {

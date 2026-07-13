@@ -307,3 +307,20 @@ deux writers en même temps).
 
 *Prochaine étape : tu valides une direction esthétique + le modèle de données
 (+ réponses aux questions), puis je crée les 3 agents et on lance l'étape 0.*
+
+---
+
+## Annexe — Intégrations Phase 2+ (validées sur le principe, non implémentées)
+
+- **Whoop** : l'API Whoop (OAuth) expose recovery, sommeil, strain, HRV, FC repos.
+  Brancher = un `WhoopSource` côté serveur qui alimente `daily_checkins`
+  (sommeil auto-scoré) et un futur "readiness" qui module la mission du jour
+  (recovery < 33% → l'app propose la Z2 ou le Recovery Protocol à la place du
+  VO2max). Prérequis : Supabase branché (les tokens OAuth ne vivent pas dans
+  localStorage) — c'est le déclencheur naturel du chantier persistance.
+- **Agenda (Google Calendar)** : lecture des événements pour détecter les jours
+  chargés/jours de mer à l'avance, proposer le créneau d'entraînement du jour
+  (chaleur → créneau tôt), et pousser la mission planifiée dans le calendrier.
+  Même prérequis serveur que Whoop.
+- Dans les deux cas, l'UI ne change pas : ces sources écrivent dans le même
+  ledger `xp_events` / les mêmes tables que la saisie manuelle.

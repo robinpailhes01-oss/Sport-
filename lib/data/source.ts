@@ -3,6 +3,7 @@ import type {
   PersonalRecord,
   Run,
   RunPerformance,
+  SavingsEntry,
   StatKey,
   WorkoutTemplate,
 } from "@/lib/engine/types";
@@ -27,6 +28,17 @@ export interface DataSource {
     value: number,
     date: string,
   ): Promise<{ record: PersonalRecord; prevBest: number | null }>;
+
+  /** Jours de mer déclarés (ISO yyyy-mm-dd) — décalent la mission, pas le streak */
+  listSeaDays(): Promise<string[]>;
+  toggleSeaDay(date: string): Promise<string[]>;
+
+  /** Habitudes cochées par date (ISO yyyy-mm-dd → clés d'habitudes) */
+  getJournal(days: number): Promise<Record<string, string[]>>;
+  toggleHabit(date: string, habitKey: string): Promise<string[]>;
+
+  getSavings(): Promise<{ total: number; entries: SavingsEntry[] }>;
+  addSaving(amount: number, date: string): Promise<SavingsEntry>;
 
   /** Crée un run et tire ses modifiers pour le risk tier donné */
   rollRun(templateId: string, riskTier: number): Promise<Run>;

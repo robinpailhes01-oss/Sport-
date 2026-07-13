@@ -152,6 +152,13 @@ export interface Run {
 
 export type XpSource = "run" | "checkin" | "bonus" | "record";
 
+export interface SavingsEntry {
+  id: number;
+  amount: number;
+  /** ISO yyyy-mm-dd */
+  date: string;
+}
+
 export interface PersonalRecord {
   id: number;
   movementKey: string;

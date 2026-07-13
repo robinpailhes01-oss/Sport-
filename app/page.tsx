@@ -13,7 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
 import { COACHES, coachForType } from "@/lib/engine/coaches";
-import { planForDate, type DayPlan } from "@/lib/engine/program";
+import { HABITS, SAVINGS_GOAL, formatEuro } from "@/lib/engine/habits";
+import {
+  planForDayIndex,
+  weekdayIndex,
+  type DayPlan,
+} from "@/lib/engine/program";
 import { PROTOCOL_DAYS, phaseForDay } from "@/lib/engine/season";
 import {
   STAT_KEYS,
@@ -30,16 +35,57 @@ export default function DashboardPage() {
   const [mission, setMission] = useState<{
     plan: DayPlan;
     template: WorkoutTemplate;
+    todayIsSea: boolean;
+    shifted: boolean;
   } | null>(null);
+  const [journalToday, setJournalToday] = useState<string[]>([]);
+  const [savingsTotal, setSavingsTotal] = useState(0);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  // La mission du jour glisse d'un cran par jour de mer déclaré cette semaine —
+  // le protocole reprend là où il s'est arrêté, le streak ne bouge pas.
+  async function refreshMission() {
+    const now = new Date();
+    const weekday = weekdayIndex(now);
+    const seaDays = await db().listSeaDays();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - weekday);
+    const mondayIso = monday.toISOString().slice(0, 10);
+    const todayIsSea = seaDays.includes(todayIso);
+    const seaBefore = seaDays.filter(
+      (d) => d >= mondayIso && d < todayIso,
+    ).length;
+    const planIndex = Math.max(0, weekday - seaBefore);
+    const plan = planForDayIndex(planIndex, now);
+    const template = await db().getTemplateBySlug(plan.resolvedSlug);
+    if (template)
+      setMission({ plan, template, todayIsSea, shifted: seaBefore > 0 });
+  }
 
   useEffect(() => {
     db().getAvatar().then(setAvatar);
     db().getActiveRun().then(setActiveRun);
-    const plan = planForDate(new Date());
     db()
-      .getTemplateBySlug(plan.resolvedSlug)
-      .then((template) => template && setMission({ plan, template }));
+      .getJournal(1)
+      .then((j) => setJournalToday(j[todayIso] ?? []));
+    db()
+      .getSavings()
+      .then((s) => setSavingsTotal(s.total));
+    refreshMission();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function toggleSea() {
+    await db().toggleSeaDay(todayIso);
+    await refreshMission();
+  }
+
+  async function toggleHabit(key: string) {
+    const day = await db().toggleHabit(todayIso, key);
+    setJournalToday(day);
+    db().getAvatar().then(setAvatar);
+  }
 
   if (!avatar) return <main className="min-h-dvh" />;
 
@@ -90,12 +136,33 @@ export default function DashboardPage() {
                 <span className="h-2 w-2 animate-pulse-live rounded-full bg-danger" />
               </Panel>
             </Link>
+          ) : mission?.todayIsSea ? (
+            <Panel className="space-y-3 border-zone2/30 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="hud-label mb-1 text-zone2">Jour de mer — off assumé</p>
+                  <p className="font-display text-lg font-bold uppercase tracking-wider">
+                    ⚓ En mer, Capitaine
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-dim">
+                    Zéro culpabilité. Demain : {mission.template.title} — le
+                    protocole reprend où il s&apos;est arrêté.
+                  </p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="w-full" onClick={toggleSea}>
+                Finalement je m&apos;entraîne — annuler
+              </Button>
+            </Panel>
           ) : mission ? (
             <Panel tone="volt" className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="hud-label mb-1">
-                    Mission du jour — {mission.plan.dayLabel}
+                    Mission du jour
+                    {mission.shifted && (
+                      <span className="text-zone2"> — décalée (mer)</span>
+                    )}
                   </p>
                   <p className="font-display text-lg font-bold uppercase tracking-wider">
                     {mission.template.title}
@@ -116,19 +183,28 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="mb-1">
-                <WeekStrip todayIndex={mission.plan.day} />
+                <WeekStrip todayIndex={weekdayIndex(new Date())} />
               </div>
               <Link href={`/run/new?tpl=${mission.template.slug}`} className="block">
                 <Button size="lg" tabIndex={-1}>
                   Lancer la mission
                 </Button>
               </Link>
-              <Link
-                href="/run/new"
-                className="block text-center font-mono text-[10px] tracking-micro text-ink-mute hover:text-ink-dim"
-              >
-                AUTRE RUN →
-              </Link>
+              <div className="flex items-center justify-between">
+                <Link
+                  href="/run/new"
+                  className="font-mono text-[10px] tracking-micro text-ink-mute hover:text-ink-dim"
+                >
+                  AUTRE RUN →
+                </Link>
+                <button
+                  type="button"
+                  onClick={toggleSea}
+                  className="font-mono text-[10px] tracking-micro text-zone2/80 transition-colors hover:text-zone2"
+                >
+                  ⚓ JOURNÉE EN MER
+                </button>
+              </div>
             </Panel>
           ) : (
             <Link href="/run/new" className="block">
@@ -137,6 +213,68 @@ export default function DashboardPage() {
               </Button>
             </Link>
           )}
+        </Rise>
+
+        {/* ── JOURNAL DU JOUR ── */}
+        <Rise>
+          <Panel className="space-y-3 p-4">
+            <div className="flex items-baseline justify-between">
+              <p className="hud-label">Journal du jour</p>
+              <Link
+                href="/journal"
+                className="font-mono text-[10px] tracking-micro text-ink-mute transition-colors hover:text-ink-dim"
+              >
+                TOUT VOIR →
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {HABITS.map((habit) => {
+                const checked = journalToday.includes(habit.key);
+                return (
+                  <button
+                    key={habit.key}
+                    type="button"
+                    onClick={() => toggleHabit(habit.key)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 border py-2.5 transition-colors",
+                      checked
+                        ? "border-volt/50 bg-volt-faint"
+                        : "border-line hover:border-line-bright",
+                    )}
+                  >
+                    <span className="text-base" aria-hidden>
+                      {habit.glyph}
+                    </span>
+                    <span
+                      className={cn(
+                        "font-mono text-[9px] tracking-micro",
+                        checked ? "text-volt" : "text-ink-mute",
+                      )}
+                    >
+                      {habit.label.toUpperCase()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <Link href="/journal" className="block">
+              <div className="flex items-baseline justify-between">
+                <span className="hud-label">💰 Épargne</span>
+                <span className="font-mono text-[11px] font-bold text-ink-dim tabular">
+                  <span className="text-volt">{formatEuro(savingsTotal)}</span> /{" "}
+                  {formatEuro(SAVINGS_GOAL)}
+                </span>
+              </div>
+              <div className="mt-1.5 h-1 w-full bg-line/60">
+                <div
+                  className="h-full bg-volt/80"
+                  style={{
+                    width: `${Math.min(1, savingsTotal / SAVINGS_GOAL) * 100}%`,
+                  }}
+                />
+              </div>
+            </Link>
+          </Panel>
         </Rise>
 
         {/* ── LES 5 STATS ── */}
