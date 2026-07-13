@@ -17,6 +17,7 @@ import { PROTOCOL_DAYS } from "@/lib/engine/season";
 import { coachForType, coachLine, type Coach } from "@/lib/engine/coaches";
 import {
   STATS,
+  WORKOUT_TYPE_LABELS,
   type AvatarState,
   type Run,
   type StatKey,
@@ -193,9 +194,7 @@ export default function RecapPage({ params }: { params: { id: string } }) {
               payload={{
                 kind: "run",
                 title: template.title,
-                xp: outcome.totalXp,
-                flawless: outcome.flawless,
-                multiplier: outcome.multiplier,
+                detail: `${WORKOUT_TYPE_LABELS[template.type]} · ${template.durationMin}′`,
                 day: avatar.dayIndex,
                 totalDays: PROTOCOL_DAYS,
                 dateLabel: new Date(

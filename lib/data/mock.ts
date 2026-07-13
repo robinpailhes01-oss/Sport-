@@ -1,7 +1,7 @@
 import { rollModifiers } from "@/lib/engine/run-generator";
 import { computeOutcome } from "@/lib/engine/scoring";
 import { statStateFromXp } from "@/lib/engine/xp";
-import { agentReply, type CommsMessage } from "@/lib/engine/comms";
+import { agentReplies, type CommsMessage } from "@/lib/engine/comms";
 import {
   FULL_JOURNAL_BONUS,
   HABITS,
@@ -506,19 +506,20 @@ export class MockDataSource implements DataSource {
       weekly[a][0] <= weekly[b][0] ? a : b,
     );
 
-    const reply = agentReply(text, mood, {
+    const replies = agentReplies(text, mood, {
       entryCount: myEntries.length,
       lastLowMoodDaysAgo,
       weakStatLabel: STATS[weakStat].label,
     });
-    const theirs: CommsMessage = {
-      id: this.state.nextCommsId++,
-      author: reply.author,
-      text: reply.text,
-      createdAt: new Date().toISOString(),
-    };
-
-    this.state.comms.push(mine, theirs);
+    this.state.comms.push(mine);
+    for (const reply of replies) {
+      this.state.comms.push({
+        id: this.state.nextCommsId++,
+        author: reply.author,
+        text: reply.text,
+        createdAt: new Date().toISOString(),
+      });
+    }
     this.persist();
     return [...this.state.comms];
   }

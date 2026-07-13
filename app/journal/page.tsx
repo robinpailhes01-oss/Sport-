@@ -144,6 +144,7 @@ export default function JournalPage() {
                 payload={{
                   kind: "recovery",
                   title: "Récup active",
+                  detail: "Bain froid · Hammam · Compression",
                   day: avatar.dayIndex,
                   totalDays: PROTOCOL_DAYS,
                   dateLabel: new Date().toLocaleDateString("fr-FR", {

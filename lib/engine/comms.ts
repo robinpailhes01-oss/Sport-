@@ -30,18 +30,6 @@ interface Rule {
 }
 
 const RULES: Rule[] = [
-  // GOGGINS — l'inconfort, le doute, l'envie de lâcher
-  {
-    author: "goggins",
-    match: (t, m) =>
-      /dur|difficile|pas envie|abandonn|lâch|mal partout|cass|démotiv|peur/.test(t) ||
-      m <= 2,
-    replies: [
-      "Bien. C'est exactement là que les autres s'arrêtent. Toi tu viens de le consigner au lieu de le fuir — c'est déjà une rep. Demain tu te présentes quand même.",
-      "Le confort t'aurait rien appris aujourd'hui. Note ce que tu ressens, garde-le, et ressors-le le jour où tu voudras négocier avec toi-même.",
-      "Tu n'as pas besoin d'être motivé. Tu as besoin d'être là. La mission de demain n'a pas bougé.",
-    ],
-  },
   // ROBBINS — le sommeil, le stress, le travail, les standards
   {
     author: "robbins",
@@ -51,6 +39,17 @@ const RULES: Rule[] = [
       "Ce que tu décris, c'est de l'énergie mal récupérée, pas un manque de volonté. Ce soir : écrans off 22h30, et un vrai protocole récup. Ton standard, c'est ça.",
       "Les journées comme celle-là sont exactement pourquoi on a mis la récup dans le jeu. Hammam ou bain froid ce soir — tu changes ton état d'abord, tes pensées suivront.",
       "Note bien cette journée : c'est en la relisant dans un mois qu'on verra ton vrai progrès. Élève le standard d'un cran, pas de dix.",
+    ],
+  },
+  // GOGGINS — l'inconfort, le doute, l'envie de lâcher (quand l'état tient encore)
+  {
+    author: "goggins",
+    match: (t) =>
+      /dur|difficile|pas envie|abandonn|lâch|mal partout|cass|démotiv|peur/.test(t),
+    replies: [
+      "Bien. C'est exactement là que les autres s'arrêtent. Toi tu viens de le consigner au lieu de le fuir — c'est déjà une rep. Demain tu te présentes quand même.",
+      "Le confort t'aurait rien appris aujourd'hui. Note ce que tu ressens, garde-le, et ressors-le le jour où tu voudras négocier avec toi-même.",
+      "Tu n'as pas besoin d'être motivé. Tu as besoin d'être là. La mission de demain n'a pas bougé.",
     ],
   },
   // ORACLE — les bilans, les chiffres, la trajectoire
@@ -63,6 +62,21 @@ const RULES: Rule[] = [
     ],
   },
 ];
+
+// Quand l'opérateur est au fond (état ≤ 2), la TEAM répond :
+// Robbins remotive d'abord, Goggins ferme la marche.
+const TEAM_LOW_MOOD: { robbins: string[]; goggins: string[] } = {
+  robbins: [
+    "Écoute-moi. Ce que tu ressens là n'est pas la réalité — c'est ton état du moment, et un état, ça se change : bouge, respire, douche froide, 10 minutes dehors. On ne prend aucune décision sur la vie un jour de batterie vide.",
+    "Regarde d'où tu viens au lieu de regarder ce qui te manque. Tu as un protocole, une trajectoire, et une équipe. Les jours comme aujourd'hui sont le prix des jours dont tu seras fier — change ton état, le reste suivra.",
+    "Un mauvais jour n'a jamais défini personne. Ta seule mission ce soir : dormir. Demain on repart avec des standards, pas des reproches.",
+  ],
+  goggins: [
+    "Et quand tu as fini de l'écouter — souviens-toi : tu as déjà survécu à 100% de tes pires journées. Stay hard.",
+    "Consigne la douleur. C'est du carburant pour demain. Rien de plus.",
+    "Personne ne vient te sauver. Bonne nouvelle : t'as jamais eu besoin de ça.",
+  ],
+};
 
 // Fallback par humeur quand aucun thème ne matche
 const FALLBACKS: Record<"high" | "mid", { author: Exclude<CommsAuthor, "me">; replies: string[] }> = {
@@ -86,14 +100,25 @@ function pick<T>(arr: T[], rng: () => number): T {
   return arr[Math.floor(rng() * arr.length)];
 }
 
-/** Route l'entrée vers la bonne persona et compose sa réponse. */
-export function agentReply(
+/**
+ * Route l'entrée et compose la ou les réponses.
+ * État ≤ 2 → la team répond à deux voix (Robbins remotive, Goggins ferme).
+ */
+export function agentReplies(
   text: string,
   mood: number,
   ctx: CommsContext,
   rng: () => number = Math.random,
-): { author: Exclude<CommsAuthor, "me">; text: string } {
+): { author: Exclude<CommsAuthor, "me">; text: string }[] {
   const t = text.toLowerCase();
+
+  if (mood <= 2) {
+    return [
+      { author: "robbins", text: pick(TEAM_LOW_MOOD.robbins, rng) },
+      { author: "goggins", text: pick(TEAM_LOW_MOOD.goggins, rng) },
+    ];
+  }
+
   const rule = RULES.find((r) => r.match(t, mood));
   const base = rule ?? (mood >= 4 ? FALLBACKS.high : FALLBACKS.mid);
 
@@ -113,5 +138,5 @@ export function agentReply(
     reply += ` (${ctx.entryCount + 1}ᵉ entrée du livre de bord — la mémoire se construit.)`;
   }
 
-  return { author: base.author, text: reply };
+  return [{ author: base.author, text: reply }];
 }

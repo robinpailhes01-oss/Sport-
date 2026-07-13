@@ -1,12 +1,13 @@
 // Générateur de carte de partage — format story 1080×1920, esthétique
 // Volt Protocol. 100% client (canvas), photo optionnelle en fond.
 
+// La carte parle de l'ACTION, pas du jeu : ce qui a été fait, quand,
+// et où on en est du protocole. Zéro XP, zéro mécanique.
 export interface SharePayload {
   kind: "run" | "recovery";
   title: string;
-  xp?: number;
-  flawless?: boolean;
-  multiplier?: number;
+  /** Ligne technique sous le titre — ex: "HYROX · 60′" ou "BAIN FROID · HAMMAM" */
+  detail?: string;
   day: number;
   totalDays: number;
   dateLabel: string;
@@ -146,58 +147,43 @@ export async function generateShareCard(
   ctx.fillText(`DAY ${payload.day}/${payload.totalDays}`, W - M, M + 12);
   ctx.textAlign = "left";
 
-  // ── bloc bas ──
-  let y = H - 420;
+  // ── bloc bas — l'action, rien que l'action ──
+  let y = H - 390;
+
+  // trait volt au-dessus du bloc : la seule touche d'accent
+  ctx.fillStyle = VOLT;
+  ctx.shadowColor = VOLT;
+  ctx.shadowBlur = 18;
+  ctx.fillRect(M, y, 120, 6);
+  ctx.shadowBlur = 0;
+  y += 46;
 
   ctx.fillStyle = INK_MUTE;
   ctx.font = `500 30px ${mono}`;
   const label =
-    payload.kind === "run" ? "R U N   T E R M I N É" : "R E C O V E R Y   D O N E";
+    payload.kind === "run" ? "S É A N C E   F A I T E" : "R É C U P   F A I T E";
   ctx.fillText(label, M, y);
-  y += 62;
+  y += 60;
 
   ctx.fillStyle = "#E6EAF2";
-  ctx.font = `700 88px ${display}`;
+  ctx.font = `700 104px ${display}`;
   ctx.fillText(payload.title.toUpperCase(), M, y, W - 2 * M);
-  y += 128;
+  y += 138;
 
-  if (payload.xp !== undefined) {
+  if (payload.detail) {
     ctx.fillStyle = VOLT;
-    ctx.shadowColor = VOLT;
-    ctx.shadowBlur = 46;
-    ctx.font = `700 150px ${display}`;
-    const xpText = `+${payload.xp.toLocaleString("fr-FR")} XP`;
-    ctx.fillText(xpText, M, y);
-    ctx.shadowBlur = 0;
-
-    if (payload.flawless) {
-      const xpWidth = ctx.measureText(xpText).width;
-      ctx.font = `500 30px ${mono}`;
-      const badge = "FLAWLESS";
-      const bw = ctx.measureText(badge).width + 48;
-      const bx = M + xpWidth + 44;
-      const by = y + 52;
-      ctx.strokeStyle = VOLT;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(bx, by, bw, 64);
-      ctx.fillStyle = VOLT;
-      ctx.fillText(badge, bx + 24, by + 18);
-    }
-    y += 190;
-  } else {
-    y += 20;
+    ctx.font = `500 36px ${mono}`;
+    ctx.fillText(payload.detail.toUpperCase(), M, y, W - 2 * M);
+    y += 74;
   }
 
   ctx.fillStyle = INK_DIM;
   ctx.font = `500 32px ${mono}`;
-  const meta = [
-    payload.dateLabel.toUpperCase(),
-    payload.multiplier ? `×${payload.multiplier.toFixed(2)}` : null,
-    "PROTOCOLE 90 JOURS",
-  ]
-    .filter(Boolean)
-    .join("  ·  ");
-  ctx.fillText(meta, M, y);
+  ctx.fillText(
+    `${payload.dateLabel.toUpperCase()}  ·  PROTOCOLE 90 JOURS`,
+    M,
+    y,
+  );
 
   // ── ticks de coin ──
   corner(ctx, 40, 40, 1, 1);
