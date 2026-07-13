@@ -150,7 +150,18 @@ export interface Run {
   outcome?: RunOutcome;
 }
 
-export type XpSource = "run" | "checkin" | "bonus";
+export type XpSource = "run" | "checkin" | "bonus" | "record";
+
+export interface PersonalRecord {
+  id: number;
+  movementKey: string;
+  /** kg, secondes, reps ou mètres selon le mouvement */
+  value: number;
+  /** Date du test (ISO yyyy-mm-dd) */
+  date: string;
+  /** true si meilleur que tous les essais précédents au moment de la saisie */
+  isPr: boolean;
+}
 
 export interface XpEvent {
   id: number;

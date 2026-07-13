@@ -4,6 +4,7 @@ import { statStateFromXp } from "@/lib/engine/xp";
 import {
   STAT_KEYS,
   type AvatarState,
+  type PersonalRecord,
   type Run,
   type RunPerformance,
   type StatKey,
@@ -12,9 +13,17 @@ import {
   type XpEvent,
 } from "@/lib/engine/types";
 import {
+  bestOf,
+  formatRecordValue,
+  isImprovement,
+  movementByKey,
+} from "@/lib/engine/records";
+import { dayOfProtocol } from "@/lib/engine/season";
+import {
   MODIFIER_CATALOG,
   SEED_EVENTS,
   SEED_PROFILE,
+  SEED_RECORDS,
   SEED_XP,
   TEMPLATES,
   seedWeeklyHistory,
@@ -26,7 +35,9 @@ const STORAGE_KEY = "ascent-save-v1";
 interface SaveState {
   xpEvents: XpEvent[];
   runs: Run[];
+  records: PersonalRecord[];
   nextEventId: number;
+  nextRecordId: number;
 }
 
 // Implémentation mock : in-memory + localStorage, 100% client.
@@ -42,12 +53,43 @@ export class MockDataSource implements DataSource {
     if (typeof window !== "undefined") {
       try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (raw) return JSON.parse(raw) as SaveState;
+        if (raw) {
+          const state = JSON.parse(raw) as SaveState;
+          // migration des vieilles sauvegardes (avant le tracker de PR)
+          if (!state.records) {
+            const seeded = this.seedRecords();
+            state.records = seeded.records;
+            state.nextRecordId = seeded.nextRecordId;
+          }
+          return state;
+        }
       } catch {
         // sauvegarde corrompue → repart du seed
       }
     }
     return this.seed();
+  }
+
+  private seedRecords(): { records: PersonalRecord[]; nextRecordId: number } {
+    let id = 1;
+    const records: PersonalRecord[] = [];
+    for (const [movementKey, value, ago] of SEED_RECORDS) {
+      const movement = movementByKey(movementKey);
+      if (!movement) continue;
+      const prev = records
+        .filter((r) => r.movementKey === movementKey)
+        .map((r) => r.value);
+      records.push({
+        id: id++,
+        movementKey,
+        value,
+        date: new Date(Date.now() - ago * 24 * 3600 * 1000)
+          .toISOString()
+          .slice(0, 10),
+        isPr: isImprovement(movement, bestOf(movement, prev), value),
+      });
+    }
+    return { records, nextRecordId: id };
   }
 
   private seed(): SaveState {
@@ -74,7 +116,8 @@ export class MockDataSource implements DataSource {
     for (const e of [...history, ...SEED_EVENTS]) {
       events.push({ ...e, id: id++ });
     }
-    return { xpEvents: events, runs: [], nextEventId: id };
+    const { records, nextRecordId } = this.seedRecords();
+    return { xpEvents: events, runs: [], records, nextEventId: id, nextRecordId };
   }
 
   private persist() {
@@ -99,6 +142,7 @@ export class MockDataSource implements DataSource {
     ) as Record<StatKey, StatState>;
     return {
       ...SEED_PROFILE,
+      dayIndex: dayOfProtocol(new Date()),
       stats,
       totalLevel: STAT_KEYS.reduce((s, k) => s + stats[k].level, 0),
       recentEvents: [...this.state.xpEvents]
@@ -213,6 +257,48 @@ export class MockDataSource implements DataSource {
         (r) => r.status === "active" || r.status === "rolled",
       ) ?? null
     );
+  }
+
+  async listRecords(): Promise<PersonalRecord[]> {
+    return [...this.state.records];
+  }
+
+  async addRecord(
+    movementKey: string,
+    value: number,
+    date: string,
+  ): Promise<{ record: PersonalRecord; prevBest: number | null }> {
+    const movement = movementByKey(movementKey);
+    if (!movement) throw new Error(`Mouvement inconnu: ${movementKey}`);
+
+    const prevBest = bestOf(
+      movement,
+      this.state.records
+        .filter((r) => r.movementKey === movementKey)
+        .map((r) => r.value),
+    );
+    const record: PersonalRecord = {
+      id: this.state.nextRecordId++,
+      movementKey,
+      value,
+      date,
+      isPr: isImprovement(movement, prevBest, value),
+    };
+    this.state.records.push(record);
+
+    // Un PR validé nourrit la stat du mouvement — le rétroviseur récompense.
+    if (record.isPr) {
+      this.state.xpEvents.push({
+        id: this.state.nextEventId++,
+        stat: movement.stat,
+        amount: 40,
+        source: "record",
+        reason: `PR — ${movement.label} ${formatRecordValue(movement.unit, value)}`,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    this.persist();
+    return { record, prevBest };
   }
 
   private mustGetRun(runId: string): Run {

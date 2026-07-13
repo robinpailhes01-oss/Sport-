@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PROTOCOL_DAYS } from "@/lib/engine/season";
 
 /** Barre HUD supérieure — identité + état du protocole, présente sur tous les écrans. */
 export function TopBar({
@@ -22,6 +23,7 @@ export function TopBar({
         <div className="flex items-center gap-4 font-mono text-[10px] tracking-micro text-ink-mute">
           <span>
             DAY <span className="text-ink">{dayIndex}</span>
+            <span className="text-ink-mute">/{PROTOCOL_DAYS}</span>
           </span>
           <span>
             STREAK <span className="text-volt">{streakDays}</span>

@@ -9,12 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
 import { coachForType } from "@/lib/engine/coaches";
-import { WEEK_PROTOCOL } from "@/lib/engine/program";
-import { TARGETS } from "@/lib/engine/targets";
+import { PROTOCOL_NOTES, WEEK_PROTOCOL } from "@/lib/engine/program";
+import {
+  HABIT_TARGETS,
+  MOVEMENTS,
+  bestOf,
+  formatRecordValue,
+} from "@/lib/engine/records";
 import {
   STAT_KEYS,
   STATS,
   type AvatarState,
+  type PersonalRecord,
   type StatKey,
   type WorkoutTemplate,
 } from "@/lib/engine/types";
@@ -26,11 +32,13 @@ export default function ProgressionPage() {
   const [avatar, setAvatar] = useState<AvatarState | null>(null);
   const [weekly, setWeekly] = useState<Record<StatKey, number[]> | null>(null);
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
+  const [records, setRecords] = useState<PersonalRecord[]>([]);
 
   useEffect(() => {
     db().getAvatar().then(setAvatar);
     db().getWeeklyXp(WEEKS).then(setWeekly);
     db().listTemplates().then(setTemplates);
+    db().listRecords().then(setRecords);
   }, []);
 
   if (!avatar || !weekly) return <main className="min-h-dvh" />;
@@ -128,6 +136,17 @@ export default function ProgressionPage() {
                 );
               })}
             </ul>
+            <ul className="mt-3 space-y-1.5 border-t border-line/60 pt-3">
+              {PROTOCOL_NOTES.map((note) => (
+                <li
+                  key={note}
+                  className="text-[11px] leading-relaxed text-ink-mute"
+                >
+                  <span className="mr-1.5 text-volt/70">▸</span>
+                  {note}
+                </li>
+              ))}
+            </ul>
           </Panel>
         </Rise>
 
@@ -142,8 +161,9 @@ export default function ProgressionPage() {
             </div>
             <div className="space-y-4">
               {STAT_KEYS.map((key) => {
-                const targets = TARGETS.filter((t) => t.stat === key);
-                if (targets.length === 0) return null;
+                const movements = MOVEMENTS.filter((m) => m.stat === key);
+                const habits = HABIT_TARGETS.filter((h) => h.stat === key);
+                if (movements.length === 0 && habits.length === 0) return null;
                 return (
                   <div key={key}>
                     <p className="mb-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-ink-dim">
@@ -153,16 +173,37 @@ export default function ProgressionPage() {
                       {STATS[key].label}
                     </p>
                     <ul className="space-y-1">
-                      {targets.map((t) => (
+                      {movements.map((m) => {
+                        const best = bestOf(
+                          m,
+                          records
+                            .filter((r) => r.movementKey === m.key)
+                            .map((r) => r.value),
+                        );
+                        return (
+                          <li
+                            key={m.key}
+                            className="flex items-baseline justify-between gap-3 text-xs"
+                          >
+                            <span className="text-ink-dim">{m.label}</span>
+                            <span className="shrink-0 font-mono font-bold text-ink tabular">
+                              {best !== null
+                                ? formatRecordValue(m.unit, best)
+                                : "—"}{" "}
+                              <span className="text-ink-mute">→</span>{" "}
+                              <span className="text-volt">{m.targetLabel}</span>
+                            </span>
+                          </li>
+                        );
+                      })}
+                      {habits.map((h) => (
                         <li
-                          key={t.label}
+                          key={h.label}
                           className="flex items-baseline justify-between gap-3 text-xs"
                         >
-                          <span className="text-ink-dim">{t.label}</span>
-                          <span className="shrink-0 font-mono font-bold text-ink tabular">
-                            {t.current ?? "—"}{" "}
-                            <span className="text-ink-mute">→</span>{" "}
-                            <span className="text-volt">{t.target}</span>
+                          <span className="text-ink-dim">{h.label}</span>
+                          <span className="shrink-0 font-mono font-bold text-volt tabular">
+                            {h.target}
                           </span>
                         </li>
                       ))}
@@ -171,9 +212,12 @@ export default function ProgressionPage() {
                 );
               })}
             </div>
-            <p className="mt-4 border-t border-line/60 pt-3 font-mono text-[10px] leading-relaxed tracking-wide text-ink-mute">
-              BASELINES « — » À CALIBRER : TEST 1RM, TIME TRIAL 5K, ROW 2K.
-            </p>
+            <Link
+              href="/records"
+              className="mt-4 block border-t border-line/60 pt-3 font-mono text-[10px] tracking-micro text-ink-mute transition-colors hover:text-ink-dim"
+            >
+              LES VALEURS COURANTES VIENNENT DU LIVRE DES RECORDS →
+            </Link>
           </Panel>
         </Rise>
 

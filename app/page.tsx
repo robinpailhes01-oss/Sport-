@@ -14,6 +14,7 @@ import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
 import { COACHES, coachForType } from "@/lib/engine/coaches";
 import { planForDate, type DayPlan } from "@/lib/engine/program";
+import { PROTOCOL_DAYS, phaseForDay } from "@/lib/engine/season";
 import {
   STAT_KEYS,
   STATS,
@@ -154,19 +155,26 @@ export default function DashboardPage() {
           </Panel>
         </Rise>
 
-        {/* ── LIEN PROGRESSION ── */}
+        {/* ── LIENS PROGRESSION / RECORDS ── */}
         <Rise>
-          <Link href="/progression" className="block">
-            <Panel className="flex items-center justify-between p-4">
-              <div>
+          <div className="grid grid-cols-2 gap-4">
+            <Link href="/progression" className="block">
+              <Panel className="p-4">
                 <p className="hud-label mb-1">Vue d&apos;ensemble</p>
                 <p className="font-display text-sm font-bold uppercase tracking-wider">
-                  Progression &amp; objectifs →
+                  Progression →
                 </p>
-              </div>
-              <span className="font-mono text-xs text-volt tabular">10 SEM</span>
-            </Panel>
-          </Link>
+              </Panel>
+            </Link>
+            <Link href="/records" className="block">
+              <Panel className="p-4">
+                <p className="hud-label mb-1">Le rétroviseur</p>
+                <p className="font-display text-sm font-bold uppercase tracking-wider">
+                  Records →
+                </p>
+              </Panel>
+            </Link>
+          </div>
         </Rise>
 
         {/* ── HANDLERS ── */}
@@ -205,18 +213,34 @@ export default function DashboardPage() {
           </Panel>
         </Rise>
 
-        {/* ── TEASER PHASE 2 ── */}
+        {/* ── PROTOCOLE 90 JOURS ── */}
         <Rise>
-          <Panel className="flex items-center justify-between p-4 opacity-50">
-            <div>
-              <p className="hud-label mb-1">Season 01 — Boss</p>
-              <p className="font-display text-sm font-bold uppercase tracking-wider">
-                Hyrox
+          <Panel className="p-4">
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <p className="hud-label">
+                Protocole 90 jours —{" "}
+                <span className="text-volt">
+                  {phaseForDay(avatar.dayIndex).name}
+                </span>
+              </p>
+              <p className="font-mono text-[10px] tracking-micro text-ink-mute">
+                JOUR{" "}
+                <span className="text-ink">{avatar.dayIndex}</span>/
+                {PROTOCOL_DAYS}
               </p>
             </div>
-            <span className="font-mono text-[10px] tracking-micro text-ink-mute">
-              🔒 VERROUILLÉ
-            </span>
+            <div className="mb-2 h-1 w-full bg-line/60">
+              <div
+                className="h-full bg-volt shadow-glow-volt-sm"
+                style={{ width: `${(avatar.dayIndex / PROTOCOL_DAYS) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-ink-dim">
+              {phaseForDay(avatar.dayIndex).focus}
+            </p>
+            <p className="mt-1.5 font-mono text-[10px] tracking-micro text-ink-mute">
+              BOSS · JOUR 90 : RETEST COMPLET DES PRS
+            </p>
           </Panel>
         </Rise>
       </Stagger>

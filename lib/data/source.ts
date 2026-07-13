@@ -1,5 +1,6 @@
 import type {
   AvatarState,
+  PersonalRecord,
   Run,
   RunPerformance,
   StatKey,
@@ -17,6 +18,15 @@ export interface DataSource {
 
   /** XP par stat agrégée par semaine — index 0 = la plus ancienne */
   getWeeklyXp(weeks: number): Promise<Record<StatKey, number[]>>;
+
+  /** Tous les essais, tous mouvements confondus */
+  listRecords(): Promise<PersonalRecord[]>;
+  /** Enregistre un essai ; s'il bat le meilleur précédent → isPr + XP */
+  addRecord(
+    movementKey: string,
+    value: number,
+    date: string,
+  ): Promise<{ record: PersonalRecord; prevBest: number | null }>;
 
   /** Crée un run et tire ses modifiers pour le risk tier donné */
   rollRun(templateId: string, riskTier: number): Promise<Run>;

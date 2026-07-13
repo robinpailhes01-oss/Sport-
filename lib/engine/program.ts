@@ -67,6 +67,14 @@ export const WEEK_PROTOCOL: DayPlan[] = [
   },
 ];
 
+// Contraintes réelles de l'opérateur : capitaine de bateau, saison chargée,
+// forte chaleur. Le protocole plie, il ne casse pas.
+export const PROTOCOL_NOTES: string[] = [
+  "Chaleur : cardio tôt le matin, sinon version salle (tapis, air bike, rameur) — chaque séance a son option.",
+  "Journée chargée : coupe à 30–40′ en gardant les blocs A/B. Court > zéro.",
+  "Pas de sled à bord ou en salle : remplacements prévus dans la séance Hyrox.",
+];
+
 function isoWeekIndex(date: Date): number {
   return Math.floor(date.getTime() / (7 * 24 * 3600 * 1000));
 }

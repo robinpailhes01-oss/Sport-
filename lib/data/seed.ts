@@ -58,6 +58,7 @@ export const TEMPLATES: WorkoutTemplate[] = [
       { name: "Bloc unique", detail: "75 min @ 65–75% FCmax — conversation possible" },
       { name: "Contrôle respiration", detail: "Respiration nasale aussi longtemps que possible" },
       { name: "Contrôle dérive", detail: "Dérive cardiaque < 5% entre 1re et 2e moitié" },
+      { name: "Option chaleur", detail: "Tôt le matin, sinon tapis/air bike en salle — même durée" },
     ],
   },
   {
@@ -75,6 +76,7 @@ export const TEMPLATES: WorkoutTemplate[] = [
       { name: "Interval 2", detail: "4 min @ 90–95% FCmax — récup 3 min trot" },
       { name: "Interval 3", detail: "4 min @ 90–95% FCmax — récup 3 min trot" },
       { name: "Interval 4", detail: "4 min @ 90–95% FCmax — cooldown 10 min" },
+      { name: "Option chaleur", detail: "Air bike ou rameur en salle — mêmes intervalles 4×4" },
     ],
   },
   {
@@ -92,6 +94,7 @@ export const TEMPLATES: WorkoutTemplate[] = [
       { name: "Bloc 2", detail: "10 min @ allure seuil — récup 2 min" },
       { name: "Bloc 3", detail: "10 min @ allure seuil — négative split si possible" },
       { name: "Cooldown", detail: "8 min footing léger" },
+      { name: "Option chaleur", detail: "Tapis inclinaison 1% ou rameur 3×10′ — même RPE" },
     ],
   },
   {
@@ -107,6 +110,7 @@ export const TEMPLATES: WorkoutTemplate[] = [
       { name: "Round 1–4", detail: "4 × (800 m run + 20 m sled push + 20 m sled pull)" },
       { name: "Compromis", detail: "Chaque run DOIT rester sous contrôle — pacing Hyrox" },
       { name: "Finisher", detail: "60 wall balls — fractionnement imposé max 15" },
+      { name: "Sans sled", detail: "→ 20 m walking lunges lestées + 15 cal rameur par round" },
     ],
   },
   {
@@ -344,6 +348,25 @@ function weeksAgo(n: number): string {
 
 export const SEED_PROFILE = {
   callsign: "OPERATOR-01",
+  // dayIndex est désormais calculé depuis le début du protocole 90 jours
+  // (lib/engine/season.ts) — conservé ici uniquement pour dater l'antériorité.
   dayIndex: 132,
   streakDays: 9,
 };
+
+// Historique de PR MOCK — valeurs plausibles à ÉCRASER par tes vrais tests.
+// Chaque entrée : [movementKey, valeur (kg/s/reps/m), il y a N jours].
+export const SEED_RECORDS: [string, number, number][] = [
+  ["back-squat", 100, 75],
+  ["back-squat", 105, 40],
+  ["back-squat", 110, 8],
+  ["deadlift", 130, 70],
+  ["deadlift", 140, 15],
+  ["strict-press", 50, 60],
+  ["strict-press", 52.5, 20],
+  ["five-k", 21 * 60 + 30, 80],
+  ["five-k", 20 * 60 + 41, 12],
+  ["row-2k", 7 * 60 + 42, 50],
+  ["muscle-ups", 2, 45],
+  ["muscle-ups", 3, 10],
+];
