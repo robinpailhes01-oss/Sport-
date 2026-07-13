@@ -30,7 +30,17 @@ export default function NewRunPage() {
   const [engaging, setEngaging] = useState(false);
 
   useEffect(() => {
-    db().listTemplates().then(setTemplates);
+    db()
+      .listTemplates()
+      .then((list) => {
+        setTemplates(list);
+        // préselection depuis la mission du jour (/run/new?tpl=slug)
+        const slug = new URLSearchParams(window.location.search).get("tpl");
+        if (slug) {
+          const preset = list.find((t) => t.slug === slug);
+          if (preset) setSelected(preset);
+        }
+      });
   }, []);
 
   async function roll() {

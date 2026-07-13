@@ -7,21 +7,37 @@ import { CoachBadge } from "@/components/game/coach-badge";
 import { Counter } from "@/components/game/counter";
 import { StatRadar } from "@/components/game/stat-radar";
 import { StatRow } from "@/components/game/stat-row";
+import { WeekStrip } from "@/components/game/week-strip";
 import { TopBar } from "@/components/hud/top-bar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
-import { COACHES } from "@/lib/engine/coaches";
-import { STAT_KEYS, STATS, type AvatarState, type Run } from "@/lib/engine/types";
-import { formatXp } from "@/lib/utils";
+import { COACHES, coachForType } from "@/lib/engine/coaches";
+import { planForDate, type DayPlan } from "@/lib/engine/program";
+import {
+  STAT_KEYS,
+  STATS,
+  type AvatarState,
+  type Run,
+  type WorkoutTemplate,
+} from "@/lib/engine/types";
+import { cn, formatXp } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [avatar, setAvatar] = useState<AvatarState | null>(null);
   const [activeRun, setActiveRun] = useState<Run | null>(null);
+  const [mission, setMission] = useState<{
+    plan: DayPlan;
+    template: WorkoutTemplate;
+  } | null>(null);
 
   useEffect(() => {
     db().getAvatar().then(setAvatar);
     db().getActiveRun().then(setActiveRun);
+    const plan = planForDate(new Date());
+    db()
+      .getTemplateBySlug(plan.resolvedSlug)
+      .then((template) => template && setMission({ plan, template }));
   }, []);
 
   if (!avatar) return <main className="min-h-dvh" />;
@@ -54,7 +70,7 @@ export default function DashboardPage() {
           </Panel>
         </Rise>
 
-        {/* ── RUN EN COURS / CTA ── */}
+        {/* ── RUN EN COURS / MISSION DU JOUR ── */}
         <Rise>
           {activeRun ? (
             <Link
@@ -73,6 +89,46 @@ export default function DashboardPage() {
                 <span className="h-2 w-2 animate-pulse-live rounded-full bg-danger" />
               </Panel>
             </Link>
+          ) : mission ? (
+            <Panel tone="volt" className="space-y-3 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="hud-label mb-1">
+                    Mission du jour — {mission.plan.dayLabel}
+                  </p>
+                  <p className="font-display text-lg font-bold uppercase tracking-wider">
+                    {mission.template.title}
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-dim">
+                    {mission.plan.intent}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 pt-1 font-mono text-[9px] tracking-micro",
+                    coachForType(mission.template.type).accent === "danger"
+                      ? "text-danger/80"
+                      : "text-zone2/80",
+                  )}
+                >
+                  {coachForType(mission.template.type).codename}
+                </span>
+              </div>
+              <div className="mb-1">
+                <WeekStrip todayIndex={mission.plan.day} />
+              </div>
+              <Link href={`/run/new?tpl=${mission.template.slug}`} className="block">
+                <Button size="lg" tabIndex={-1}>
+                  Lancer la mission
+                </Button>
+              </Link>
+              <Link
+                href="/run/new"
+                className="block text-center font-mono text-[10px] tracking-micro text-ink-mute hover:text-ink-dim"
+              >
+                AUTRE RUN →
+              </Link>
+            </Panel>
           ) : (
             <Link href="/run/new" className="block">
               <Button size="lg" tabIndex={-1}>
@@ -96,6 +152,21 @@ export default function DashboardPage() {
               ))}
             </div>
           </Panel>
+        </Rise>
+
+        {/* ── LIEN PROGRESSION ── */}
+        <Rise>
+          <Link href="/progression" className="block">
+            <Panel className="flex items-center justify-between p-4">
+              <div>
+                <p className="hud-label mb-1">Vue d&apos;ensemble</p>
+                <p className="font-display text-sm font-bold uppercase tracking-wider">
+                  Progression &amp; objectifs →
+                </p>
+              </div>
+              <span className="font-mono text-xs text-volt tabular">10 SEM</span>
+            </Panel>
+          </Link>
         </Rise>
 
         {/* ── HANDLERS ── */}

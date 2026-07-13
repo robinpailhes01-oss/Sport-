@@ -17,6 +17,7 @@ import {
   SEED_PROFILE,
   SEED_XP,
   TEMPLATES,
+  seedWeeklyHistory,
 } from "./seed";
 import type { DataSource } from "./source";
 
@@ -52,16 +53,17 @@ export class MockDataSource implements DataSource {
   private seed(): SaveState {
     let id = 1;
     const events: XpEvent[] = [];
-    // Solde de départ par stat (antériorité du protocole)…
+    const history = seedWeeklyHistory();
+    // Solde de départ par stat : SEED_XP moins ce que l'historique hebdo et
+    // les events récents apportent déjà — les totaux restent exacts.
     for (const stat of STAT_KEYS) {
-      const recentForStat = SEED_EVENTS.filter((e) => e.stat === stat).reduce(
-        (s, e) => s + e.amount,
-        0,
-      );
+      const accounted = [...SEED_EVENTS, ...history]
+        .filter((e) => e.stat === stat)
+        .reduce((s, e) => s + e.amount, 0);
       events.push({
         id: id++,
         stat,
-        amount: SEED_XP[stat] - recentForStat,
+        amount: SEED_XP[stat] - accounted,
         source: "bonus",
         reason: "Antériorité du protocole",
         createdAt: new Date(
@@ -69,8 +71,7 @@ export class MockDataSource implements DataSource {
         ).toISOString(),
       });
     }
-    // …puis les events récents lisibles dans le feed.
-    for (const e of SEED_EVENTS) {
+    for (const e of [...history, ...SEED_EVENTS]) {
       events.push({ ...e, id: id++ });
     }
     return { xpEvents: events, runs: [], nextEventId: id };
@@ -113,6 +114,25 @@ export class MockDataSource implements DataSource {
 
   async getTemplate(id: string): Promise<WorkoutTemplate | null> {
     return TEMPLATES.find((t) => t.id === id) ?? null;
+  }
+
+  async getTemplateBySlug(slug: string): Promise<WorkoutTemplate | null> {
+    return TEMPLATES.find((t) => t.slug === slug) ?? null;
+  }
+
+  async getWeeklyXp(weeks: number): Promise<Record<StatKey, number[]>> {
+    const WEEK_MS = 7 * 24 * 3600 * 1000;
+    const now = Date.now();
+    const result = Object.fromEntries(
+      STAT_KEYS.map((k) => [k, Array(weeks).fill(0)]),
+    ) as Record<StatKey, number[]>;
+    for (const e of this.state.xpEvents) {
+      if (e.source === "bonus") continue;
+      const age = Math.floor((now - Date.parse(e.createdAt)) / WEEK_MS);
+      if (age < 0 || age >= weeks) continue;
+      result[e.stat][weeks - 1 - age] += e.amount;
+    }
+    return result;
   }
 
   async rollRun(templateId: string, riskTier: number): Promise<Run> {

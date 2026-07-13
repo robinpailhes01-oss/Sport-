@@ -46,9 +46,11 @@ const TYPE_OWNER: Record<WorkoutType, CoachKey> = {
   hyrox: "goggins",
   lactate: "goggins",
   vo2max: "goggins",
+  crossfit: "goggins",
   force: "robbins",
   hypertrophie: "robbins",
   fonctionnel: "robbins",
+  recovery: "robbins",
 };
 
 export function coachForType(type: WorkoutType): Coach {

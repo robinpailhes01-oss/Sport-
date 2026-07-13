@@ -59,7 +59,9 @@ export type WorkoutType =
   | "zone2"
   | "hyrox"
   | "lactate"
-  | "vo2max";
+  | "vo2max"
+  | "crossfit"
+  | "recovery";
 
 export const WORKOUT_TYPE_LABELS: Record<WorkoutType, string> = {
   force: "Force",
@@ -67,8 +69,10 @@ export const WORKOUT_TYPE_LABELS: Record<WorkoutType, string> = {
   fonctionnel: "Fonctionnel",
   zone2: "Zone 2",
   hyrox: "Hyrox",
-  lactate: "Lactate",
+  lactate: "Seuil",
   vo2max: "VO2max",
+  crossfit: "CrossFit",
+  recovery: "Recovery",
 };
 
 export interface WorkoutBlock {

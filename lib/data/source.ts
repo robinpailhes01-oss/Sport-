@@ -2,6 +2,7 @@ import type {
   AvatarState,
   Run,
   RunPerformance,
+  StatKey,
   WorkoutTemplate,
 } from "@/lib/engine/types";
 
@@ -12,6 +13,10 @@ export interface DataSource {
   getAvatar(): Promise<AvatarState>;
   listTemplates(): Promise<WorkoutTemplate[]>;
   getTemplate(id: string): Promise<WorkoutTemplate | null>;
+  getTemplateBySlug(slug: string): Promise<WorkoutTemplate | null>;
+
+  /** XP par stat agrégée par semaine — index 0 = la plus ancienne */
+  getWeeklyXp(weeks: number): Promise<Record<StatKey, number[]>>;
 
   /** Crée un run et tire ses modifiers pour le risk tier donné */
   rollRun(templateId: string, riskTier: number): Promise<Run>;
