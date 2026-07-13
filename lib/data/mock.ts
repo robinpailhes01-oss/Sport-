@@ -54,6 +54,8 @@ interface SaveState {
   journalGranted: Record<string, string[]>;
   /** dates dont le journal a été validé (clôture explicite de la journée) */
   journalValidated: Record<string, boolean>;
+  /** date → heure d'entraînement déclarée ("HH:MM") */
+  trainingTimes: Record<string, string>;
   savings: SavingsEntry[];
   comms: CommsMessage[];
   nextEventId: number;
@@ -94,6 +96,7 @@ export class MockDataSource implements DataSource {
           state.comms ??= [];
           state.nextCommsId ??= 1;
           state.journalValidated ??= {};
+          state.trainingTimes ??= {};
           return state;
         }
       } catch {
@@ -160,6 +163,7 @@ export class MockDataSource implements DataSource {
       journal,
       journalGranted: { ...journal },
       journalValidated: {},
+      trainingTimes: {},
       savings,
       comms: [],
       nextEventId: id,
@@ -396,6 +400,16 @@ export class MockDataSource implements DataSource {
     else this.state.seaDays.push(date);
     this.persist();
     return [...this.state.seaDays];
+  }
+
+  async getTrainingTime(date: string): Promise<string | null> {
+    return this.state.trainingTimes[date] ?? null;
+  }
+
+  async setTrainingTime(date: string, time: string | null): Promise<void> {
+    if (time) this.state.trainingTimes[date] = time;
+    else delete this.state.trainingTimes[date];
+    this.persist();
   }
 
   async getJournal(days: number): Promise<Record<string, string[]>> {

@@ -45,6 +45,7 @@ export default function DashboardPage() {
   } | null>(null);
   const [keepPlanned, setKeepPlanned] = useState(false);
   const [journalToday, setJournalToday] = useState<string[]>([]);
+  const [trainingTime, setTrainingTime] = useState<string>("");
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [analystHeadline, setAnalystHeadline] = useState<string | null>(null);
 
@@ -103,6 +104,9 @@ export default function DashboardPage() {
     db()
       .getJournal(1)
       .then((j) => setJournalToday(j[todayIso] ?? []));
+    db()
+      .getTrainingTime(todayIso)
+      .then((t) => setTrainingTime(t ?? ""));
     db()
       .getSavings()
       .then((s) => setSavingsTotal(s.total));
@@ -285,6 +289,30 @@ export default function DashboardPage() {
                   )}
                 </div>
               )}
+              {/* Déclaration d'heure — demain, ça s'écrira dans l'agenda */}
+              <div>
+                <div className="flex items-center justify-between gap-3 border border-line px-3 py-2">
+                  <span className="hud-label">⏱ Je m&apos;entraîne à</span>
+                  <input
+                    type="time"
+                    value={trainingTime}
+                    onChange={async (e) => {
+                      setTrainingTime(e.target.value);
+                      await db().setTrainingTime(
+                        todayIso,
+                        e.target.value || null,
+                      );
+                    }}
+                    className="border-0 bg-transparent font-mono text-base font-bold text-volt outline-none tabular"
+                  />
+                </div>
+                {trainingTime >= "11:00" && trainingTime <= "16:59" && (
+                  <p className="mt-1.5 font-mono text-[10px] tracking-wide text-danger/90">
+                    ☀️ 11H–17H = FOURNAISE — VISE PLUS TÔT, OU VERSION SALLE
+                    (PRÉVUE DANS LA SÉANCE).
+                  </p>
+                )}
+              </div>
               <div className="mb-1">
                 <WeekStrip todayIndex={weekdayIndex(new Date())} />
               </div>

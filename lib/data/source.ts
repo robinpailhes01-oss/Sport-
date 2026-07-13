@@ -34,6 +34,10 @@ export interface DataSource {
   listSeaDays(): Promise<string[]>;
   toggleSeaDay(date: string): Promise<string[]>;
 
+  /** Heure d'entraînement déclarée pour un jour ("HH:MM"), null si non fixée */
+  getTrainingTime(date: string): Promise<string | null>;
+  setTrainingTime(date: string, time: string | null): Promise<void>;
+
   /** Habitudes cochées par date (ISO yyyy-mm-dd → clés d'habitudes) */
   getJournal(days: number): Promise<Record<string, string[]>>;
   toggleHabit(date: string, habitKey: string): Promise<string[]>;
