@@ -324,3 +324,9 @@ deux writers en même temps).
   Même prérequis serveur que Whoop.
 - Dans les deux cas, l'UI ne change pas : ces sources écrivent dans le même
   ledger `xp_events` / les mêmes tables que la saisie manuelle.
+- **Oracle (l'Analyste)** : troisième persona (après les handlers Goggins/Robbins).
+  Aujourd'hui rule-based (`lib/engine/analyst.ts`) sur le ledger local : momentum
+  XP, adhérence journal, projection épargne, écarts PR→cibles, directive de
+  semaine. Évolution prévue : mêmes sections nourries par Whoop (corrélations
+  habitudes ↔ récupération) puis génération LLM du débrief via API — l'interface
+  `buildReport(inputs) → Report` est le point d'extension.

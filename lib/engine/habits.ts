@@ -38,6 +38,30 @@ export const HABITS: Habit[] = [
     xp: 10,
     blurb: "20 min minimum",
   },
+  {
+    key: "ecrans-off",
+    label: "Écrans off 22h30",
+    glyph: "📵",
+    stat: "discipline",
+    xp: 10,
+    blurb: "Cutoff strict — le sommeil commence là",
+  },
+  {
+    key: "coucher-regulier",
+    label: "Coucher régulier",
+    glyph: "🌙",
+    stat: "discipline",
+    xp: 10,
+    blurb: "Même heure ±30 min",
+  },
+  {
+    key: "recup-outils",
+    label: "Récup active",
+    glyph: "❄️",
+    stat: "discipline",
+    xp: 10,
+    blurb: "Hammam, bain froid ou compression",
+  },
 ];
 
 export function habitByKey(key: string): Habit | null {

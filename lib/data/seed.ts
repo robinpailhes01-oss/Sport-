@@ -156,8 +156,10 @@ export const TEMPLATES: WorkoutTemplate[] = [
     blocks: [
       { name: "A. Flush", detail: "20 min marche rapide ou vélo Z1" },
       { name: "B. Mobilité", detail: "15 min hanches + épaules + thoracique" },
-      { name: "C. Respiration", detail: "5 min 4-7-8 ou cohérence cardiaque" },
-      { name: "D. Protocole soir", detail: "Écrans off 22h30 — 7h30+ de sommeil" },
+      { name: "C. Hammam", detail: "15–20 min — hydrate avant/après" },
+      { name: "D. Bain froid", detail: "3–5 min @ 10–12°C — sortie calme, pas de sprint" },
+      { name: "E. Compression", detail: "Bottes 20–30 min, jambes surélevées" },
+      { name: "F. Protocole soir", detail: "Écrans off 22h30 — 7h30+ de sommeil" },
     ],
   },
 ];

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Rise, Stagger } from "@/components/motion/primitives";
+import { AnalystInsignia } from "@/components/game/analyst-badge";
 import { CoachBadge } from "@/components/game/coach-badge";
 import { Counter } from "@/components/game/counter";
 import { StatRadar } from "@/components/game/stat-radar";
@@ -12,6 +13,7 @@ import { TopBar } from "@/components/hud/top-bar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
+import { buildReport } from "@/lib/engine/analyst";
 import { COACHES, coachForType } from "@/lib/engine/coaches";
 import { HABITS, SAVINGS_GOAL, formatEuro } from "@/lib/engine/habits";
 import {
@@ -40,6 +42,7 @@ export default function DashboardPage() {
   } | null>(null);
   const [journalToday, setJournalToday] = useState<string[]>([]);
   const [savingsTotal, setSavingsTotal] = useState(0);
+  const [analystHeadline, setAnalystHeadline] = useState<string | null>(null);
 
   const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -72,6 +75,26 @@ export default function DashboardPage() {
     db()
       .getSavings()
       .then((s) => setSavingsTotal(s.total));
+    // le débrief d'Oracle, calculé sur le ledger local
+    (async () => {
+      const [av, weekly, journal, savings, records] = await Promise.all([
+        db().getAvatar(),
+        db().getWeeklyXp(10),
+        db().getJournal(14),
+        db().getSavings(),
+        db().listRecords(),
+      ]);
+      const report = buildReport({
+        weekly,
+        journal,
+        savingsTotal: savings.total,
+        savingsEntries: savings.entries,
+        records,
+        day: av.dayIndex,
+        phase: phaseForDay(av.dayIndex),
+      });
+      setAnalystHeadline(report.headline);
+    })();
     refreshMission();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -292,6 +315,30 @@ export default function DashboardPage() {
             </div>
           </Panel>
         </Rise>
+
+        {/* ── ORACLE — DÉBRIEF ── */}
+        {analystHeadline && (
+          <Rise>
+            <Link href="/rapport" className="block">
+              <Panel className="flex items-start gap-3 p-4">
+                <div className="shrink-0 pt-0.5">
+                  <AnalystInsignia size={36} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="hud-label mb-1 text-volt">
+                    Oracle — débrief prêt
+                  </p>
+                  <p className="text-xs leading-snug text-ink-dim">
+                    {analystHeadline}
+                  </p>
+                  <p className="mt-1.5 font-mono text-[10px] tracking-micro text-ink-mute">
+                    RAPPORT COMPLET →
+                  </p>
+                </div>
+              </Panel>
+            </Link>
+          </Rise>
+        )}
 
         {/* ── LIENS PROGRESSION / RECORDS ── */}
         <Rise>
