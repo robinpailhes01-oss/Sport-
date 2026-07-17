@@ -1,6 +1,6 @@
 import { rollModifiers } from "@/lib/engine/run-generator";
 import { computeOutcome } from "@/lib/engine/scoring";
-import { statStateFromXp } from "@/lib/engine/xp";
+import { statStateFromXp, totalScore } from "@/lib/engine/xp";
 import { agentReplies, type CommsMessage } from "@/lib/engine/comms";
 import {
   FULL_JOURNAL_BONUS,
@@ -233,7 +233,7 @@ export class MockDataSource implements DataSource {
       ...SEED_PROFILE,
       dayIndex: dayOfProtocol(new Date()),
       stats,
-      totalLevel: STAT_KEYS.reduce((s, k) => s + stats[k].level, 0),
+      score: totalScore(totals),
       recentEvents: [...this.state.xpEvents]
         .filter((e) => e.source !== "bonus")
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))

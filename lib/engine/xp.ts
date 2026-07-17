@@ -28,9 +28,13 @@ export function statStateFromXp(xp: number): StatState {
   return { xp, level: progress.level, progress };
 }
 
-export function totalLevel(xpByStat: Record<StatKey, number>): number {
+// Score global /100 — chaque stat plafonne sa contribution à 20 (5 stats × 20 = 100),
+// pour que le score reste un vrai "/100" même quand les niveaux dépassent 20 avec les mois.
+const SCORE_STAT_CAP = 20;
+
+export function totalScore(xpByStat: Record<StatKey, number>): number {
   return Object.values(xpByStat).reduce(
-    (sum, xp) => sum + levelFromXp(xp),
+    (sum, xp) => sum + Math.min(levelFromXp(xp), SCORE_STAT_CAP),
     0,
   );
 }

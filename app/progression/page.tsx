@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Rise, Stagger } from "@/components/motion/primitives";
+import { WeekProtocolList } from "@/components/game/week-protocol-list";
 import { WeeklyBars } from "@/components/game/weekly-bars";
 import { TopBar } from "@/components/hud/top-bar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
-import { coachForType } from "@/lib/engine/coaches";
-import { PROTOCOL_NOTES, WEEK_PROTOCOL } from "@/lib/engine/program";
+import { PROTOCOL_NOTES, weekdayIndex } from "@/lib/engine/program";
 import {
   HABIT_TARGETS,
   MOVEMENTS,
@@ -24,7 +24,7 @@ import {
   type StatKey,
   type WorkoutTemplate,
 } from "@/lib/engine/types";
-import { cn, formatXp } from "@/lib/utils";
+import { formatXp } from "@/lib/utils";
 
 const WEEKS = 10;
 
@@ -42,8 +42,6 @@ export default function ProgressionPage() {
   }, []);
 
   if (!avatar || !weekly) return <main className="min-h-dvh" />;
-
-  const bySlug = new Map(templates.map((t) => [t.slug, t]));
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-lg px-4 pb-12 pt-6">
@@ -97,45 +95,10 @@ export default function ProgressionPage() {
         <Rise>
           <Panel className="p-4">
             <p className="hud-label mb-3">Protocole hebdo — semaine type</p>
-            <ul className="divide-y divide-line/60">
-              {WEEK_PROTOCOL.map((plan) => {
-                const tpl = bySlug.get(plan.templateSlug);
-                const alt = plan.altTemplateSlug
-                  ? bySlug.get(plan.altTemplateSlug)
-                  : null;
-                const coach = tpl ? coachForType(tpl.type) : null;
-                return (
-                  <li key={plan.day} className="flex items-center gap-3 py-2.5">
-                    <span className="w-9 shrink-0 font-mono text-[10px] tracking-micro text-ink-mute">
-                      {plan.dayShort}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-display text-xs font-bold uppercase tracking-wide">
-                        {tpl?.title}
-                        {alt && (
-                          <span className="text-ink-mute"> / {alt.title}</span>
-                        )}
-                      </p>
-                      <p className="mt-0.5 truncate text-[11px] text-ink-dim">
-                        {plan.intent}
-                      </p>
-                    </div>
-                    {coach && (
-                      <span
-                        className={cn(
-                          "shrink-0 font-mono text-[9px] tracking-micro",
-                          coach.accent === "danger"
-                            ? "text-danger/80"
-                            : "text-zone2/80",
-                        )}
-                      >
-                        {coach.monogram}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            <WeekProtocolList
+              templates={templates}
+              highlightDay={weekdayIndex(new Date())}
+            />
             <ul className="mt-3 space-y-1.5 border-t border-line/60 pt-3">
               {PROTOCOL_NOTES.map((note) => (
                 <li

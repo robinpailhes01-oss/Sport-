@@ -8,7 +8,7 @@ import { CoachBadge } from "@/components/game/coach-badge";
 import { Counter } from "@/components/game/counter";
 import { StatRadar } from "@/components/game/stat-radar";
 import { StatRow } from "@/components/game/stat-row";
-import { WeekStrip } from "@/components/game/week-strip";
+import { WeekProtocolList } from "@/components/game/week-protocol-list";
 import { TopBar } from "@/components/hud/top-bar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
@@ -35,6 +35,9 @@ import { cn, formatXp } from "@/lib/utils";
 export default function DashboardPage() {
   const [avatar, setAvatar] = useState<AvatarState | null>(null);
   const [activeRun, setActiveRun] = useState<Run | null>(null);
+  const [activeRunTemplate, setActiveRunTemplate] =
+    useState<WorkoutTemplate | null>(null);
+  const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
   const [mission, setMission] = useState<{
     plan: DayPlan;
     template: WorkoutTemplate;
@@ -100,7 +103,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     db().getAvatar().then(setAvatar);
-    db().getActiveRun().then(setActiveRun);
+    db().listTemplates().then(setTemplates);
+    db()
+      .getActiveRun()
+      .then(async (run) => {
+        setActiveRun(run);
+        setActiveRunTemplate(run ? await db().getTemplate(run.templateId) : null);
+      });
     db()
       .getJournal(1)
       .then((j) => setJournalToday(j[todayIso] ?? []));
@@ -163,9 +172,10 @@ export default function DashboardPage() {
                 </p>
               </div>
               <div className="text-right">
-                <p className="hud-label mb-1">Niveau total</p>
+                <p className="hud-label mb-1">Score</p>
                 <p className="font-display text-4xl font-bold leading-none text-volt text-glow-volt">
-                  <Counter value={avatar.totalLevel} duration={1.4} />
+                  <Counter value={avatar.score} duration={1.4} />
+                  <span className="text-lg text-ink-mute">/100</span>
                 </p>
               </div>
             </div>
@@ -181,23 +191,29 @@ export default function DashboardPage() {
             <Panel tone="danger" className="space-y-3 p-4">
               <Link
                 href={activeRun.status === "active" ? `/run/${activeRun.id}` : "/run/new"}
-                className="flex items-center justify-between"
+                className="flex items-center justify-between gap-3"
               >
-                <div>
+                <div className="min-w-0">
                   <p className="hud-label mb-1 text-danger">
                     Run {activeRun.status === "active" ? "en cours" : "armé"}
                   </p>
-                  <p className="font-display text-sm font-bold uppercase tracking-wider">
-                    Reprendre le run →
+                  <p className="truncate font-display text-lg font-bold uppercase tracking-wider">
+                    {activeRunTemplate?.title ?? "Run"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-dim">
+                    {activeRun.status === "active"
+                      ? "Reprendre →"
+                      : "Terminer le tirage →"}
                   </p>
                 </div>
-                <span className="h-2 w-2 animate-pulse-live rounded-full bg-danger" />
+                <span className="h-2 w-2 shrink-0 animate-pulse-live rounded-full bg-danger" />
               </Link>
               <button
                 type="button"
                 onClick={async () => {
                   await db().abandonRun(activeRun.id);
                   setActiveRun(await db().getActiveRun());
+                  setActiveRunTemplate(null);
                 }}
                 className="block w-full text-center font-mono text-[10px] tracking-micro text-ink-mute transition-colors hover:text-danger"
               >
@@ -313,9 +329,6 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-              <div className="mb-1">
-                <WeekStrip todayIndex={weekdayIndex(new Date())} />
-              </div>
               <Link href={`/run/new?tpl=${mission.template.slug}`} className="block">
                 <Button size="lg" tabIndex={-1}>
                   Lancer la mission
@@ -344,6 +357,26 @@ export default function DashboardPage() {
               </Button>
             </Link>
           )}
+        </Rise>
+
+        {/* ── CETTE SEMAINE — toujours visible, même run en cours ── */}
+        <Rise>
+          <Panel className="p-4">
+            <div className="mb-1 flex items-baseline justify-between">
+              <p className="hud-label">Cette semaine</p>
+              <Link
+                href="/progression"
+                className="font-mono text-[10px] tracking-micro text-ink-mute transition-colors hover:text-ink-dim"
+              >
+                DÉTAIL →
+              </Link>
+            </div>
+            <WeekProtocolList
+              templates={templates}
+              highlightDay={weekdayIndex(new Date())}
+              showIntent={false}
+            />
+          </Panel>
         </Rise>
 
         {/* ── JOURNAL DU JOUR ── */}

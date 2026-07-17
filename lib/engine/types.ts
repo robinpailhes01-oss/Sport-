@@ -202,6 +202,7 @@ export interface AvatarState {
   dayIndex: number;
   streakDays: number;
   stats: Record<StatKey, StatState>;
-  totalLevel: number;
+  /** 0..100 — chaque stat plafonne sa contribution à 20 points */
+  score: number;
   recentEvents: XpEvent[];
 }
