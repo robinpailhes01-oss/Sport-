@@ -224,6 +224,33 @@ export class MockDataSource implements DataSource {
     return totals;
   }
 
+  // Un jour compte pour le streak s'il porte un run complété, un journal
+  // validé ou un jour de mer déclaré. "Aujourd'hui" incomplet ne casse pas
+  // la chaîne tant qu'il n'est pas fini — on regarde hier en attendant.
+  private computeStreak(): number {
+    const active = new Set<string>();
+    for (const r of this.state.runs) {
+      if (r.status === "completed" && r.completedAt) {
+        active.add(r.completedAt.slice(0, 10));
+      }
+    }
+    for (const [date, ok] of Object.entries(this.state.journalValidated)) {
+      if (ok) active.add(date);
+    }
+    for (const d of this.state.seaDays) active.add(d);
+
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const cursor = new Date();
+    if (!active.has(iso(cursor))) cursor.setDate(cursor.getDate() - 1);
+
+    let streak = 0;
+    while (active.has(iso(cursor))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+
   async getAvatar(): Promise<AvatarState> {
     const totals = this.xpByStat();
     const stats = Object.fromEntries(
@@ -231,6 +258,7 @@ export class MockDataSource implements DataSource {
     ) as Record<StatKey, StatState>;
     return {
       ...SEED_PROFILE,
+      streakDays: this.computeStreak(),
       dayIndex: dayOfProtocol(new Date()),
       stats,
       score: totalScore(totals),
@@ -560,6 +588,28 @@ export class MockDataSource implements DataSource {
     }
     this.persist();
     return [...this.state.comms];
+  }
+
+  // Repart de zéro : le seed() de démo (utile en design) ne doit jamais
+  // revenir après un reset — un vrai lancement part d'un état réellement vide.
+  async resetProtocol(): Promise<void> {
+    this.state = {
+      xpEvents: [],
+      runs: [],
+      records: [],
+      seaDays: [],
+      journal: {},
+      journalGranted: {},
+      journalValidated: {},
+      trainingTimes: {},
+      savings: [],
+      comms: [],
+      nextEventId: 1,
+      nextRecordId: 1,
+      nextSavingsId: 1,
+      nextCommsId: 1,
+    };
+    this.persist();
   }
 
   private mustGetRun(runId: string): Run {

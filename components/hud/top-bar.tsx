@@ -19,17 +19,22 @@ export function TopBar({
         </span>
         <span className="h-1.5 w-1.5 animate-pulse-live rounded-full bg-volt shadow-glow-volt-sm" />
       </Link>
-      {dayIndex !== undefined && (
-        <div className="flex items-center gap-4 font-mono text-[10px] tracking-micro text-ink-mute">
-          <span>
-            DAY <span className="text-ink">{dayIndex}</span>
-            <span className="text-ink-mute">/{PROTOCOL_DAYS}</span>
-          </span>
-          <span>
-            STREAK <span className="text-volt">{streakDays}</span>
-          </span>
-        </div>
-      )}
+      <div className="flex items-center gap-4 font-mono text-[10px] tracking-micro text-ink-mute">
+        {dayIndex !== undefined && (
+          <>
+            <span>
+              DAY <span className="text-ink">{dayIndex}</span>
+              <span className="text-ink-mute">/{PROTOCOL_DAYS}</span>
+            </span>
+            <span>
+              STREAK <span className="text-volt">{streakDays}</span>
+            </span>
+          </>
+        )}
+        <Link href="/reglages" className="transition-colors hover:text-ink-dim" aria-label="Réglages">
+          ⚙
+        </Link>
+      </div>
     </header>
   );
 }

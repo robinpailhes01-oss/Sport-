@@ -62,4 +62,7 @@ export interface DataSource {
 
   getRun(runId: string): Promise<Run | null>;
   getActiveRun(): Promise<Run | null>;
+
+  /** Efface tout : XP, records, journal, épargne, comms. Repart à zéro, irréversible. */
+  resetProtocol(): Promise<void>;
 }
