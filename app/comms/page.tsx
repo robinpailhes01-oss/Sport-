@@ -47,7 +47,7 @@ export default function CommsPage() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length]);
+  }, [messages.length, sending]);
 
   async function send() {
     if (!text.trim() || sending) return;
@@ -124,6 +124,37 @@ export default function CommsPage() {
                   </div>
                 </motion.div>
               ),
+            )}
+            {sending && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25, ease: HUD_EASE }}
+                className="mr-6 flex items-start gap-2.5"
+              >
+                <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center border border-line text-ink-mute">
+                  <span className="text-xs">Δ</span>
+                </div>
+                <div className="flex min-w-0 items-center gap-2 border border-line bg-surface px-3 py-3">
+                  <p className="hud-label">L&apos;équipe lit ton message</p>
+                  <div className="flex items-center gap-1">
+                    {[0, 1, 2].map((i) => (
+                      <motion.span
+                        key={i}
+                        className="h-1.5 w-1.5 rounded-full bg-volt"
+                        animate={{ opacity: [0.25, 1, 0.25] }}
+                        transition={{
+                          duration: 1.1,
+                          repeat: Infinity,
+                          delay: i * 0.18,
+                          ease: "easeInOut",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
             )}
             <div ref={endRef} />
           </div>

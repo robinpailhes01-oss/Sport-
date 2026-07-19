@@ -2,9 +2,11 @@ import { rollModifiers } from "@/lib/engine/run-generator";
 import { computeOutcome } from "@/lib/engine/scoring";
 import { statStateFromXp, totalScore } from "@/lib/engine/xp";
 import { agentReplies, type CommsMessage } from "@/lib/engine/comms";
+import type { CommsAiContext, CommsAiResponse } from "@/lib/ai/comms-types";
 import {
   FULL_JOURNAL_BONUS,
   HABITS,
+  SAVINGS_GOAL,
   SAVINGS_XP,
   formatEuro,
   habitByKey,
@@ -28,7 +30,7 @@ import {
   isImprovement,
   movementByKey,
 } from "@/lib/engine/records";
-import { dayOfProtocol } from "@/lib/engine/season";
+import { dayOfProtocol, phaseForDay } from "@/lib/engine/season";
 import {
   MODIFIER_CATALOG,
   SEED_EVENTS,
@@ -571,12 +573,17 @@ export class MockDataSource implements DataSource {
     const weakStat = STAT_KEYS.reduce((a, b) =>
       weekly[a][0] <= weekly[b][0] ? a : b,
     );
+    const topStat = STAT_KEYS.reduce((a, b) =>
+      weekly[a][0] >= weekly[b][0] ? a : b,
+    );
 
-    const replies = agentReplies(text, mood, {
+    const replies = await this.commsReplies(text, mood, {
       entryCount: myEntries.length,
       lastLowMoodDaysAgo,
       weakStatLabel: STATS[weakStat].label,
+      topStatLabel: STATS[topStat].label,
     });
+
     this.state.comms.push(mine);
     for (const reply of replies) {
       this.state.comms.push({
@@ -588,6 +595,80 @@ export class MockDataSource implements DataSource {
     }
     this.persist();
     return [...this.state.comms];
+  }
+
+  // Essaie l'IA réelle (route /api/comms) avec un contexte complet du ledger ;
+  // retombe silencieusement sur le moteur de règles local si la route échoue
+  // ou si aucune clé n'est configurée côté serveur.
+  private async commsReplies(
+    text: string,
+    mood: number,
+    partial: {
+      entryCount: number;
+      lastLowMoodDaysAgo: number | null;
+      weakStatLabel: string;
+      topStatLabel: string;
+    },
+  ): Promise<{ author: Exclude<CommsMessage["author"], "me">; text: string }[]> {
+    const fallback = () =>
+      agentReplies(text, mood, {
+        entryCount: partial.entryCount,
+        lastLowMoodDaysAgo: partial.lastLowMoodDaysAgo,
+        weakStatLabel: partial.weakStatLabel,
+      });
+
+    if (typeof window === "undefined") return fallback();
+
+    try {
+      const day = dayOfProtocol(new Date());
+      const phase = phaseForDay(day);
+      const savingsTotal = this.state.savings.reduce((s, e) => s + e.amount, 0);
+      const journalValidatedDays = Object.values(
+        this.state.journalValidated,
+      ).filter(Boolean).length;
+      const lastPr = [...this.state.records]
+        .filter((r) => r.isPr)
+        .sort((a, b) => b.date.localeCompare(a.date))[0];
+      const lastRecordLabel = lastPr
+        ? `${movementByKey(lastPr.movementKey)?.label ?? lastPr.movementKey} ${formatRecordValue(movementByKey(lastPr.movementKey)!.unit, lastPr.value)}`
+        : null;
+      const history = this.state.comms.slice(-8).map((m) => ({
+        author: m.author,
+        text: m.text,
+        mood: m.mood,
+      }));
+
+      const context: CommsAiContext = {
+        score: totalScore(this.xpByStat()),
+        streakDays: this.computeStreak(),
+        day,
+        protocolDays: 90,
+        phaseName: phase.name,
+        phaseFocus: phase.focus,
+        entryCount: partial.entryCount,
+        lastLowMoodDaysAgo: partial.lastLowMoodDaysAgo,
+        topStatLabel: partial.topStatLabel,
+        weakStatLabel: partial.weakStatLabel,
+        journalValidatedDays,
+        savingsTotal,
+        savingsGoal: SAVINGS_GOAL,
+        lastRecordLabel,
+        history,
+      };
+
+      const res = await fetch("/api/comms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, mood, context }),
+      });
+      if (!res.ok) return fallback();
+
+      const data = (await res.json()) as CommsAiResponse;
+      if (!data.replies?.length) return fallback();
+      return data.replies;
+    } catch {
+      return fallback();
+    }
   }
 
   // Repart de zéro : le seed() de démo (utile en design) ne doit jamais
