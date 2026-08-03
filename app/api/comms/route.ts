@@ -1,11 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { NextResponse } from "next/server";
-import {
-  CommsReplySchema,
-  buildCommsSystemPrompt,
-  buildCommsUserPrompt,
-} from "@/lib/ai/comms-prompt";
+import { callCommsAi } from "@/lib/ai/comms-client";
 import type { CommsAiRequest } from "@/lib/ai/comms-types";
 
 // Route serveur — seul endroit du projet qui voit ANTHROPIC_API_KEY.
@@ -33,35 +27,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Requête incomplète" }, { status: 400 });
   }
 
-  try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.parse({
-      model: "claude-opus-4-8",
-      max_tokens: 1024,
-      thinking: { type: "adaptive" },
-      output_config: {
-        effort: "medium",
-        format: zodOutputFormat(CommsReplySchema),
-      },
-      system: buildCommsSystemPrompt(),
-      messages: [
-        {
-          role: "user",
-          content: buildCommsUserPrompt(body.text, body.mood, body.context),
-        },
-      ],
-    });
-
-    if (!response.parsed_output) {
-      return NextResponse.json(
-        { error: "Réponse IA non exploitable" },
-        { status: 502 },
-      );
-    }
-
-    return NextResponse.json(response.parsed_output);
-  } catch (err) {
-    console.error("[/api/comms]", err);
-    return NextResponse.json({ error: "Échec de l'appel IA" }, { status: 502 });
+  const replies = await callCommsAi(body.text, body.mood, body.context);
+  if (!replies) {
+    return NextResponse.json(
+      { error: "Réponse IA non exploitable" },
+      { status: 502 },
+    );
   }
+  return NextResponse.json({ replies });
 }
