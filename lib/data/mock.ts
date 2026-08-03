@@ -15,10 +15,12 @@ import { STATS } from "@/lib/engine/types";
 import {
   STAT_KEYS,
   type AvatarState,
+  type BodyScan,
   type PersonalRecord,
   type Run,
   type RunPerformance,
   type SavingsEntry,
+  type ScanAngle,
   type StatKey,
   type StatState,
   type WorkoutTemplate,
@@ -60,10 +62,21 @@ interface SaveState {
   trainingTimes: Record<string, string>;
   savings: SavingsEntry[];
   comms: CommsMessage[];
+  /** Photos de scan stockées en dataURL — mode local uniquement, taille limitée */
+  bodyScans: StoredBodyScan[];
   nextEventId: number;
   nextRecordId: number;
   nextSavingsId: number;
   nextCommsId: number;
+  nextScanId: number;
+}
+
+interface StoredBodyScan {
+  id: number;
+  date: string;
+  angle: ScanAngle;
+  dataUrl: string;
+  createdAt: string;
 }
 
 // Implémentation mock : in-memory + localStorage, 100% client.
@@ -99,6 +112,8 @@ export class MockDataSource implements DataSource {
           state.nextCommsId ??= 1;
           state.journalValidated ??= {};
           state.trainingTimes ??= {};
+          state.bodyScans ??= [];
+          state.nextScanId ??= 1;
           return state;
         }
       } catch {
@@ -168,10 +183,12 @@ export class MockDataSource implements DataSource {
       trainingTimes: {},
       savings,
       comms: [],
+      bodyScans: [],
       nextEventId: id,
       nextRecordId,
       nextSavingsId,
       nextCommsId: 1,
+      nextScanId: 1,
     };
   }
 
@@ -673,6 +690,7 @@ export class MockDataSource implements DataSource {
 
   // Repart de zéro : le seed() de démo (utile en design) ne doit jamais
   // revenir après un reset — un vrai lancement part d'un état réellement vide.
+  // Les scans corporels survivent au reset — ce sont des photos, pas du jeu.
   async resetProtocol(): Promise<void> {
     this.state = {
       xpEvents: [],
@@ -685,11 +703,46 @@ export class MockDataSource implements DataSource {
       trainingTimes: {},
       savings: [],
       comms: [],
+      bodyScans: this.state.bodyScans,
       nextEventId: 1,
       nextRecordId: 1,
       nextSavingsId: 1,
       nextCommsId: 1,
+      nextScanId: this.state.nextScanId,
     };
+    this.persist();
+  }
+
+  async listBodyScans(): Promise<BodyScan[]> {
+    return [...this.state.bodyScans]
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+      .map((s) => ({ id: s.id, date: s.date, angle: s.angle, url: s.dataUrl, createdAt: s.createdAt }));
+  }
+
+  async addBodyScan(date: string, angle: ScanAngle, dataUrl: string): Promise<BodyScan> {
+    const scan: StoredBodyScan = {
+      id: this.state.nextScanId++,
+      date,
+      angle,
+      dataUrl,
+      createdAt: new Date().toISOString(),
+    };
+    this.state.bodyScans.push(scan);
+    try {
+      this.persist();
+    } catch {
+      // localStorage plein (les photos sont lourdes) — on retire le scan
+      // qu'on vient d'ajouter plutôt que de laisser un état incohérent.
+      this.state.bodyScans.pop();
+      throw new Error(
+        "Stockage local plein — passe sur Supabase pour garder tes scans (voir Réglages).",
+      );
+    }
+    return { id: scan.id, date: scan.date, angle: scan.angle, url: scan.dataUrl, createdAt: scan.createdAt };
+  }
+
+  async deleteBodyScan(id: number): Promise<void> {
+    this.state.bodyScans = this.state.bodyScans.filter((s) => s.id !== id);
     this.persist();
   }
 

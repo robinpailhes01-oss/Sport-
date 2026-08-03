@@ -1,10 +1,12 @@
 import type { CommsMessage } from "@/lib/engine/comms";
 import type {
   AvatarState,
+  BodyScan,
   PersonalRecord,
   Run,
   RunPerformance,
   SavingsEntry,
+  ScanAngle,
   StatKey,
   WorkoutTemplate,
 } from "@/lib/engine/types";
@@ -65,4 +67,10 @@ export interface DataSource {
 
   /** Efface tout : XP, records, journal, épargne, comms. Repart à zéro, irréversible. */
   resetProtocol(): Promise<void>;
+
+  /** Tous les scans, du plus récent au plus ancien — url signée/temporaire, jamais publique */
+  listBodyScans(): Promise<BodyScan[]>;
+  /** dataUrl = "data:image/jpeg;base64,...", capturé côté client */
+  addBodyScan(date: string, angle: ScanAngle, dataUrl: string): Promise<BodyScan>;
+  deleteBodyScan(id: number): Promise<void>;
 }

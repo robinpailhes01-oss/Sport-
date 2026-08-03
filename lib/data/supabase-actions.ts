@@ -18,10 +18,12 @@ import { STATS } from "@/lib/engine/types";
 import {
   STAT_KEYS,
   type AvatarState,
+  type BodyScan,
   type PersonalRecord,
   type Run,
   type RunPerformance,
   type SavingsEntry,
+  type ScanAngle,
   type StatKey,
   type StatState,
   type WorkoutTemplate,
@@ -767,4 +769,101 @@ async function commsReplies(
 export async function resetProtocol(): Promise<void> {
   const { error } = await supabaseAdmin().rpc("reset_ascent_protocol");
   bail(error);
+}
+
+// ── Scans corporels ──────────────────────────────────────────
+// Bucket Storage PRIVÉ (créé en migration) — jamais d'URL publique, toujours
+// une URL signée à durée de vie courte générée ici, côté serveur.
+
+const SCANS_BUCKET = "body-scans";
+
+function parseDataUrl(dataUrl: string): { buffer: Buffer; contentType: string } {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) throw new Error("Format d'image invalide");
+  return { buffer: Buffer.from(match[2], "base64"), contentType: match[1] };
+}
+
+function rowToBodyScan(r: Record<string, unknown>, url: string): BodyScan {
+  return {
+    id: r.id as number,
+    date: r.date as string,
+    angle: r.angle as ScanAngle,
+    url,
+    createdAt: r.created_at as string,
+  };
+}
+
+export async function listBodyScans(): Promise<BodyScan[]> {
+  const admin = supabaseAdmin();
+  const { data, error } = await admin
+    .from("body_scans")
+    .select("id, date, angle, storage_path, created_at")
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+  bail(error);
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  const { data: signed, error: e2 } = await admin.storage
+    .from(SCANS_BUCKET)
+    .createSignedUrls(
+      rows.map((r) => r.storage_path as string),
+      3600,
+    );
+  bail(e2);
+
+  const urlByPath = new Map(
+    (signed ?? []).map((s) => [s.path ?? "", s.signedUrl]),
+  );
+  return rows.map((r) =>
+    rowToBodyScan(r, urlByPath.get(r.storage_path as string) ?? ""),
+  );
+}
+
+export async function addBodyScan(
+  date: string,
+  angle: ScanAngle,
+  dataUrl: string,
+): Promise<BodyScan> {
+  const admin = supabaseAdmin();
+  const { buffer, contentType } = parseDataUrl(dataUrl);
+  const ext = contentType === "image/png" ? "png" : "jpg";
+  const path = `${date}/${angle}-${Date.now()}.${ext}`;
+
+  const { error: e1 } = await admin.storage
+    .from(SCANS_BUCKET)
+    .upload(path, buffer, { contentType, upsert: false });
+  bail(e1);
+
+  const { data: inserted, error: e2 } = await admin
+    .from("body_scans")
+    .insert({ date, angle, storage_path: path })
+    .select("id, date, angle, storage_path, created_at")
+    .single();
+  bail(e2);
+
+  const { data: signed, error: e3 } = await admin.storage
+    .from(SCANS_BUCKET)
+    .createSignedUrl(path, 3600);
+  bail(e3);
+
+  return rowToBodyScan(inserted!, signed?.signedUrl ?? "");
+}
+
+export async function deleteBodyScan(id: number): Promise<void> {
+  const admin = supabaseAdmin();
+  const { data: row, error: e1 } = await admin
+    .from("body_scans")
+    .select("storage_path")
+    .eq("id", id)
+    .maybeSingle();
+  bail(e1);
+  if (!row) return;
+
+  const { error: e2 } = await admin.storage
+    .from(SCANS_BUCKET)
+    .remove([row.storage_path as string]);
+  bail(e2);
+  const { error: e3 } = await admin.from("body_scans").delete().eq("id", id);
+  bail(e3);
 }

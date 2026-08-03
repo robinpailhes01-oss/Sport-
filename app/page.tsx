@@ -481,9 +481,9 @@ export default function DashboardPage() {
           </Rise>
         )}
 
-        {/* ── LIENS PROGRESSION / RECORDS / COMMS ── */}
+        {/* ── LIENS PROGRESSION / RECORDS / COMMS / SCANS ── */}
         <Rise>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Link href="/progression" className="block">
               <Panel className="p-3">
                 <p className="hud-label mb-1">Vue</p>
@@ -505,6 +505,14 @@ export default function DashboardPage() {
                 <p className="hud-label mb-1">Agents</p>
                 <p className="font-display text-xs font-bold uppercase tracking-wider">
                   Comms →
+                </p>
+              </Panel>
+            </Link>
+            <Link href="/scans" className="block">
+              <Panel className="p-3">
+                <p className="hud-label mb-1">Visuel</p>
+                <p className="font-display text-xs font-bold uppercase tracking-wider">
+                  Scan →
                 </p>
               </Panel>
             </Link>

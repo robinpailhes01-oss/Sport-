@@ -206,3 +206,15 @@ export interface AvatarState {
   score: number;
   recentEvents: XpEvent[];
 }
+
+export type ScanAngle = "face" | "profil" | "dos";
+
+export interface BodyScan {
+  id: number;
+  /** ISO yyyy-mm-dd */
+  date: string;
+  angle: ScanAngle;
+  /** URL affichable — signée et temporaire pour Supabase, data: URL en local */
+  url: string;
+  createdAt: string;
+}

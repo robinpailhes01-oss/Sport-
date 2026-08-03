@@ -1,10 +1,12 @@
 import type { CommsMessage } from "@/lib/engine/comms";
 import type {
   AvatarState,
+  BodyScan,
   PersonalRecord,
   Run,
   RunPerformance,
   SavingsEntry,
+  ScanAngle,
   StatKey,
   WorkoutTemplate,
 } from "@/lib/engine/types";
@@ -101,5 +103,14 @@ export class SupabaseDataSource implements DataSource {
   }
   resetProtocol(): Promise<void> {
     return actions.resetProtocol();
+  }
+  listBodyScans(): Promise<BodyScan[]> {
+    return actions.listBodyScans();
+  }
+  addBodyScan(date: string, angle: ScanAngle, dataUrl: string): Promise<BodyScan> {
+    return actions.addBodyScan(date, angle, dataUrl);
+  }
+  deleteBodyScan(id: number): Promise<void> {
+    return actions.deleteBodyScan(id);
   }
 }
