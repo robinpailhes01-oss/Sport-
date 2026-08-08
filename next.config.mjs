@@ -1,5 +1,3 @@
-// Commit de test — déclenche un nouveau build Vercel pour vérifier que
-// l'auto-déploiement Git fonctionne toujours (voir diagnostic en cours).
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
