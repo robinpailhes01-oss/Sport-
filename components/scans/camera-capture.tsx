@@ -72,6 +72,9 @@ export function CameraCapture({
       .getUserMedia({ video: { facingMode: "environment" }, audio: false })
       .then((stream) => {
         streamRef.current = stream;
+        // Couvre le cas "reprendre" où le <video> est déjà monté (le ref
+        // existe déjà) — l'effet ci-dessous couvre le tout premier montage,
+        // où le <video> n'existe pas encore à cet instant précis.
         if (videoRef.current) videoRef.current.srcObject = stream;
         setStreamAvailable(true);
         setPhase("ready");
@@ -93,6 +96,17 @@ export function CameraCapture({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Le <video> n'est monté dans le DOM qu'une fois streamAvailable=true (voir
+  // JSX) — à ce moment-là seulement videoRef.current existe vraiment. Tenter
+  // d'assigner srcObject depuis le .then() de getUserMedia arrive trop tôt
+  // (ref encore null) : c'est cet effet, qui se relance après le montage,
+  // qui fait l'assignation pour de vrai.
+  useEffect(() => {
+    if (streamAvailable && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [streamAvailable]);
 
   // Le chrono tourne toujours ici, qu'il y ait un flux caméra ou non.
   useEffect(() => {
