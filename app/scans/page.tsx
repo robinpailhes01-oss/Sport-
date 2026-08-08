@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Rise, Stagger } from "@/components/motion/primitives";
 import { TopBar } from "@/components/hud/top-bar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { CaptureSlot } from "@/components/scans/capture-slot";
+import { CameraCapture } from "@/components/scans/camera-capture";
 import { CompareSlider } from "@/components/scans/compare-slider";
 import { db } from "@/lib/data";
-import type { AvatarState, BodyScan, ScanAngle } from "@/lib/engine/types";
+import { STAT_KEYS, STATS, type AvatarState, type BodyScan, type ScanAngle } from "@/lib/engine/types";
 import { cn } from "@/lib/utils";
 
 const ANGLES: { key: ScanAngle; label: string }[] = [
@@ -66,6 +67,11 @@ export default function ScansPage() {
   const [draft, setDraft] = useState<Partial<Record<ScanAngle, string>>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [priorityLabel, setPriorityLabel] = useState<string | null>(null);
+
+  const [activeCamera, setActiveCamera] = useState<ScanAngle | null>(null);
+  const fallbackInputRef = useRef<HTMLInputElement>(null);
+  const fallbackAngleRef = useRef<ScanAngle | null>(null);
 
   const [dateA, setDateA] = useState<string | null>(null);
   const [dateB, setDateB] = useState<string | null>(null);
@@ -74,7 +80,29 @@ export default function ScansPage() {
   useEffect(() => {
     db().getAvatar().then(setAvatar);
     refresh();
+    // Vraie donnée du ledger — jamais une analyse d'image — pour donner au
+    // scan un sens de progression de personnage sans rien inventer.
+    db()
+      .getWeeklyXp(1)
+      .then((weekly) => {
+        const weakest = STAT_KEYS.reduce((a, b) => (weekly[a][0] <= weekly[b][0] ? a : b));
+        setPriorityLabel(STATS[weakest].label);
+      });
   }, []);
+
+  function setDraftFor(angle: ScanAngle, dataUrl: string) {
+    setError(null);
+    setDraft((d) => ({ ...d, [angle]: dataUrl }));
+  }
+
+  function openCamera(angle: ScanAngle) {
+    setActiveCamera(angle);
+  }
+
+  function openFallback(angle: ScanAngle) {
+    fallbackAngleRef.current = angle;
+    fallbackInputRef.current?.click();
+  }
 
   async function refresh() {
     const list = await db().listBodyScans();
@@ -96,11 +124,13 @@ export default function ScansPage() {
     }
   }, [dates.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleCapture(angle: ScanAngle, file: File) {
+  async function handleFallbackFile(file: File) {
+    const angle = fallbackAngleRef.current;
+    if (!angle) return;
     setError(null);
     try {
       const dataUrl = await resizeToDataUrl(file);
-      setDraft((d) => ({ ...d, [angle]: dataUrl }));
+      setDraftFor(angle, dataUrl);
     } catch {
       setError("Impossible de lire cette photo — réessaie.");
     }
@@ -159,10 +189,22 @@ export default function ScansPage() {
                   angle={key}
                   label={label}
                   previewUrl={draft[key] ?? todayScans?.[key]?.url}
-                  onCapture={(file) => handleCapture(key, file)}
+                  onClick={() => openCamera(key)}
                 />
               ))}
             </div>
+            <input
+              ref={fallbackInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFallbackFile(file);
+                e.target.value = "";
+              }}
+            />
             {error && (
               <p className="mt-3 font-mono text-[11px] text-danger">{error}</p>
             )}
@@ -177,6 +219,12 @@ export default function ScansPage() {
             <p className="mt-2 text-center font-mono text-[10px] leading-relaxed text-ink-mute">
               Stocké en privé — jamais public, jamais visible sans toi.
             </p>
+            {priorityLabel && (
+              <p className="mt-3 border-t border-line pt-3 text-center font-mono text-[10px] tracking-wide text-ink-mute">
+                Zone prioritaire du protocole —{" "}
+                <span className="text-volt">{priorityLabel.toUpperCase()}</span>
+              </p>
+            )}
           </Panel>
         </Rise>
 
@@ -295,6 +343,21 @@ export default function ScansPage() {
           </Link>
         </Rise>
       </Stagger>
+
+      {activeCamera && (
+        <CameraCapture
+          angle={activeCamera}
+          label={ANGLES.find((a) => a.key === activeCamera)!.label}
+          priorityLabel={priorityLabel}
+          onCapture={(dataUrl) => setDraftFor(activeCamera, dataUrl)}
+          onClose={() => setActiveCamera(null)}
+          onFallback={() => {
+            const angle = activeCamera;
+            setActiveCamera(null);
+            openFallback(angle);
+          }}
+        />
+      )}
     </main>
   );
 }

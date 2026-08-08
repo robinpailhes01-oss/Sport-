@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef } from "react";
 import { Silhouette } from "./silhouette";
 import type { ScanAngle } from "@/lib/engine/types";
 
@@ -8,20 +7,19 @@ export function CaptureSlot({
   angle,
   label,
   previewUrl,
-  onCapture,
+  onClick,
 }: {
   angle: ScanAngle;
   label: string;
   previewUrl?: string;
-  onCapture: (file: File) => void;
+  onClick: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
   return (
     <div className="flex flex-col items-center gap-1.5">
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={onClick}
+        aria-label={`Scanner — ${label}`}
         className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden border border-line bg-void text-ink-mute transition-colors hover:border-line-bright"
       >
         {previewUrl ? (
@@ -40,18 +38,6 @@ export function CaptureSlot({
           </span>
         )}
       </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onCapture(file);
-          e.target.value = "";
-        }}
-      />
       <span className="hud-label">{label}</span>
     </div>
   );
