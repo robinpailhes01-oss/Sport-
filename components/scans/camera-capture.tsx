@@ -6,7 +6,11 @@ import { HUD_EASE } from "@/components/motion/primitives";
 import { Silhouette } from "./silhouette";
 import type { ScanAngle } from "@/lib/engine/types";
 
-type Phase = "loading" | "live" | "counting" | "scanning" | "review" | "error";
+// "ready" couvre les deux cas — flux caméra en direct OU pas (permission
+// refusée, contexte PWA sans accès webcam, etc.). Le chrono tourne dans les
+// deux cas ; seule la façon de conclure diffère (capture directe vs bascule
+// vers l'appareil photo natif du téléphone APRÈS le chrono, jamais avant).
+type Phase = "loading" | "ready" | "counting" | "scanning" | "review";
 
 const SCAN_LINES = (priorityLabel: string | null) => [
   "CALIBRAGE MORPHOLOGIQUE…",
@@ -47,52 +51,68 @@ export function CameraCapture({
   priorityLabel: string | null;
   onCapture: (dataUrl: string) => void;
   onClose: () => void;
-  /** Appelé si la caméra est inaccessible — le parent rouvre l'input natif */
+  /** Appelé APRÈS le chrono si aucun flux caméra n'était disponible — le
+   * parent rouvre l'input natif, qui prend alors la photo lui-même. */
   onFallback: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("loading");
+  const [streamAvailable, setStreamAvailable] = useState(false);
   const [count, setCount] = useState(3);
   const [photo, setPhoto] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    navigator.mediaDevices
+  function acquireCamera(): Promise<void> {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStreamAvailable(false);
+      setPhase("ready");
+      return Promise.resolve();
+    }
+    return navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "environment" }, audio: false })
       .then((stream) => {
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
-        setPhase("live");
+        setStreamAvailable(true);
+        setPhase("ready");
       })
       .catch(() => {
-        if (!cancelled) setPhase("error");
+        setStreamAvailable(false);
+        setPhase("ready");
       });
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    acquireCamera().then(() => {
+      if (cancelled) streamRef.current?.getTracks().forEach((t) => t.stop());
+    });
     return () => {
       cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Le chrono tourne toujours ici, qu'il y ait un flux caméra ou non.
   useEffect(() => {
     if (phase !== "counting") return;
     if (count === 0) {
       const video = videoRef.current;
-      if (video) {
-        const dataUrl = captureVideoFrame(video);
-        setPhoto(dataUrl);
+      if (streamAvailable && video) {
+        setPhoto(captureVideoFrame(video));
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        setPhase("scanning");
+      } else {
+        // Rien à capturer nous-mêmes — le chrono a fait son travail,
+        // l'appareil photo natif prend le relais maintenant.
+        onFallback();
       }
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      setPhase("scanning");
       return;
     }
     const t = setTimeout(() => setCount((c) => c - 1), 900);
     return () => clearTimeout(t);
-  }, [phase, count]);
+  }, [phase, count, streamAvailable, onFallback]);
 
   useEffect(() => {
     if (phase !== "scanning") return;
@@ -108,14 +128,7 @@ export function CameraCapture({
   function retake() {
     setPhoto(null);
     setPhase("loading");
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" }, audio: false })
-      .then((stream) => {
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        setPhase("live");
-      })
-      .catch(() => setPhase("error"));
+    acquireCamera();
   }
 
   function confirm() {
@@ -127,10 +140,6 @@ export function CameraCapture({
     streamRef.current?.getTracks().forEach((t) => t.stop());
     onClose();
   }
-
-  useEffect(() => {
-    if (phase === "error") onFallback();
-  }, [phase, onFallback]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-void">
@@ -147,7 +156,7 @@ export function CameraCapture({
       </div>
 
       <div className="relative flex-1 overflow-hidden bg-black">
-        {phase !== "scanning" && phase !== "review" && (
+        {streamAvailable && phase !== "scanning" && phase !== "review" && (
           <video
             ref={videoRef}
             autoPlay
@@ -157,10 +166,17 @@ export function CameraCapture({
           />
         )}
 
-        {(phase === "live" || phase === "counting") && (
+        {(phase === "ready" || phase === "counting") && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8 text-ink">
             <Silhouette angle={angle} />
           </div>
+        )}
+
+        {!streamAvailable && phase === "ready" && (
+          <p className="pointer-events-none absolute inset-x-4 top-4 text-center font-mono text-[10px] leading-relaxed text-ink-mute">
+            Caméra intégrée indisponible — le chrono te prépare, puis
+            l&apos;appareil photo du téléphone s&apos;ouvre.
+          </p>
         )}
 
         {photo && (phase === "scanning" || phase === "review") && (
@@ -218,7 +234,7 @@ export function CameraCapture({
       </div>
 
       <div className="border-t border-line p-4">
-        {phase === "live" && (
+        {phase === "ready" && (
           <button
             type="button"
             onClick={startCountdown}
