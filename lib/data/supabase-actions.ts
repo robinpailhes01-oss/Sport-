@@ -785,12 +785,16 @@ const DEFAULT_PROFILE: OperatorProfile = {
   goal: "hybride-hyrox",
   constraints: null,
   timeBudgetMin: 60,
+  scanCalibration: null,
 };
 
 export async function getProfile(): Promise<OperatorProfile> {
+  // select("*") plutôt que la liste des colonnes : la migration 0005 ajoute
+  // scan_calibration, et l'app doit continuer à tourner entre le déploiement
+  // du code et l'exécution de la migration.
   const { data, error } = await supabaseAdmin()
     .from("operator_profile")
-    .select("height_cm, birthdate, equipment, goal, constraints, time_budget_min")
+    .select("*")
     .eq("id", 1)
     .maybeSingle();
   bail(error);
@@ -802,6 +806,7 @@ export async function getProfile(): Promise<OperatorProfile> {
     goal: data.goal as Goal,
     constraints: data.constraints,
     timeBudgetMin: data.time_budget_min,
+    scanCalibration: data.scan_calibration ?? null,
   };
 }
 
@@ -810,7 +815,7 @@ export async function setProfile(
 ): Promise<OperatorProfile> {
   const current = await getProfile();
   const next = { ...current, ...patch };
-  const { error } = await supabaseAdmin().from("operator_profile").upsert({
+  const row: Record<string, unknown> = {
     id: 1,
     height_cm: next.heightCm,
     birthdate: next.birthdate,
@@ -818,9 +823,22 @@ export async function setProfile(
     goal: next.goal,
     constraints: next.constraints,
     time_budget_min: next.timeBudgetMin,
+    scan_calibration: next.scanCalibration,
     updated_at: new Date().toISOString(),
-  });
-  bail(error);
+  };
+
+  const { error } = await supabaseAdmin().from("operator_profile").upsert(row);
+  if (error) {
+    // Migration 0005 pas encore passée : on réessaie sans le calage plutôt
+    // que de perdre l'enregistrement du reste du profil.
+    if (/scan_calibration/.test(error.message)) {
+      delete row.scan_calibration;
+      const retry = await supabaseAdmin().from("operator_profile").upsert(row);
+      bail(retry.error);
+      return { ...next, scanCalibration: current.scanCalibration };
+    }
+    bail(error);
+  }
   return next;
 }
 

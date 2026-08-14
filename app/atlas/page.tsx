@@ -5,6 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Rise, Stagger } from "@/components/motion/primitives";
 import { TopBar } from "@/components/hud/top-bar";
 import { BodyMap, ZONE_LABELS, ZoneLegend } from "@/components/game/body-map";
+import {
+  BodyScanOverlay,
+  CalibrationControls,
+} from "@/components/game/body-scan-overlay";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
@@ -17,7 +21,15 @@ import {
   trackedExercises,
   type ZoneStatus,
 } from "@/lib/engine/strength";
-import type { AvatarState, BodyScan, SetLog, WeighIn } from "@/lib/engine/types";
+import {
+  DEFAULT_SCAN_TRANSFORM,
+  type AvatarState,
+  type BodyScan,
+  type OperatorProfile,
+  type ScanTransform,
+  type SetLog,
+  type WeighIn,
+} from "@/lib/engine/types";
 import { cn } from "@/lib/utils";
 
 const fmtTonnage = (kg: number) =>
@@ -28,23 +40,28 @@ export default function AtlasPage() {
   const [logs, setLogs] = useState<SetLog[]>([]);
   const [weighIns, setWeighIns] = useState<WeighIn[]>([]);
   const [scans, setScans] = useState<BodyScan[]>([]);
+  const [profile, setProfile] = useState<OperatorProfile | null>(null);
   const [view, setView] = useState<"front" | "back">("front");
   const [selected, setSelected] = useState<MuscleKey | null>(null);
-  const [overlay, setOverlay] = useState(false);
+  const [mode, setMode] = useState<"schema" | "photo">("schema");
+  const [calibrating, setCalibrating] = useState(false);
+  const [transform, setTransform] = useState<ScanTransform>(DEFAULT_SCAN_TRANSFORM);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const [a, l, w, s] = await Promise.all([
+      const [a, l, w, s, p] = await Promise.all([
         db().getAvatar(),
         db().listSetLogs(),
         db().listWeighIns(),
         db().listBodyScans(),
+        db().getProfile(),
       ]);
       setAvatar(a);
       setLogs(l);
       setWeighIns(w);
       setScans(s);
+      setProfile(p);
       setReady(true);
     })();
   }, []);
@@ -69,10 +86,25 @@ export default function AtlasPage() {
   const stagnating = tracked.filter((t) => t.stagnating);
 
   // Le scan le plus récent de l'angle correspondant à la vue affichée.
-  const scanForView = useMemo(() => {
-    const angle = view === "front" ? "face" : "dos";
-    return scans.find((s) => s.angle === angle) ?? null;
-  }, [scans, view]);
+  const angle = view === "front" ? "face" : "dos";
+  const scanForView = useMemo(
+    () => scans.find((s) => s.angle === angle) ?? null,
+    [scans, angle],
+  );
+
+  // Le calage est propre à chaque angle — on le recharge à chaque bascule.
+  useEffect(() => {
+    setTransform(profile?.scanCalibration?.[angle] ?? DEFAULT_SCAN_TRANSFORM);
+    setCalibrating(false);
+  }, [profile, angle]);
+
+  async function saveCalibration() {
+    if (!profile) return;
+    const next = { ...(profile.scanCalibration ?? {}), [angle]: transform };
+    const updated = await db().setProfile({ scanCalibration: next });
+    setProfile(updated);
+    setCalibrating(false);
+  }
 
   const hasData = logs.length > 0;
 
@@ -146,6 +178,32 @@ export default function AtlasPage() {
         {/* ── CARTE ── */}
         <Rise>
           <Panel className="p-4">
+            <div className="mb-2 grid grid-cols-2 gap-1.5">
+              {(
+                [
+                  ["schema", "Schéma"],
+                  ["photo", "Scan réel"],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode(m);
+                    setSelected(null);
+                  }}
+                  className={cn(
+                    "border py-2 font-display text-[11px] font-bold uppercase tracking-wide transition-colors",
+                    mode === m
+                      ? "border-volt bg-volt-faint text-volt"
+                      : "border-line text-ink-mute hover:border-line-bright",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div className="mb-3 grid grid-cols-2 gap-1.5">
               {(["front", "back"] as const).map((v) => (
                 <button
@@ -167,16 +225,42 @@ export default function AtlasPage() {
               ))}
             </div>
 
-            <div className="relative mx-auto aspect-[1/2] w-full max-w-[240px]">
-              {overlay && scanForView && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={scanForView.url}
-                  alt={`Scan ${view}`}
-                  className="absolute inset-0 h-full w-full object-cover"
+            {mode === "photo" && scanForView ? (
+              <>
+                <BodyScanOverlay
+                  photoUrl={scanForView.url}
+                  view={view}
+                  statusByMuscle={statusByMuscle}
+                  transform={transform}
+                  calibrating={calibrating}
+                  onTransformChange={setTransform}
+                  selected={selected}
+                  onSelect={setSelected}
+                  scanKey={`${scanForView.id}-${calibrating}`}
                 />
-              )}
-              <div className={cn("absolute inset-0", overlay && "opacity-70")}>
+                {calibrating ? (
+                  <>
+                    <CalibrationControls
+                      transform={transform}
+                      onChange={setTransform}
+                      onReset={() => setTransform(DEFAULT_SCAN_TRANSFORM)}
+                    />
+                    <Button size="md" className="mt-2 w-full" onClick={saveCalibration}>
+                      Valider le calage
+                    </Button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCalibrating(true)}
+                    className="mt-2 w-full border border-line py-2 font-mono text-[10px] uppercase tracking-wide text-ink-mute transition-colors hover:border-line-bright"
+                  >
+                    ⊹ Caler le calque sur ton corps
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="relative mx-auto aspect-[1/2] w-full max-w-[240px]">
                 <BodyMap
                   view={view}
                   statusByMuscle={statusByMuscle}
@@ -184,25 +268,22 @@ export default function AtlasPage() {
                   onSelect={setSelected}
                 />
               </div>
-            </div>
+            )}
 
             <div className="mt-3">
               <ZoneLegend />
             </div>
 
-            {scanForView && (
-              <button
-                type="button"
-                onClick={() => setOverlay((o) => !o)}
-                className={cn(
-                  "mt-3 w-full border py-2 font-mono text-[10px] uppercase tracking-wide transition-colors",
-                  overlay
-                    ? "border-volt text-volt"
-                    : "border-line text-ink-mute hover:border-line-bright",
-                )}
-              >
-                {overlay ? "◧ Masquer ta photo" : "◧ Calquer sur ta photo"}
-              </button>
+            {mode === "photo" && !scanForView && (
+              <p className="mt-3 border border-line/50 p-4 text-center font-mono text-[11px] leading-relaxed text-ink-mute">
+                Pas de scan «{" "}
+                {view === "front" ? "face" : "dos"} » enregistré.
+                <br />
+                <Link href="/scans" className="text-volt underline">
+                  Prends-en un
+                </Link>{" "}
+                pour projeter l&apos;analyse sur ton corps.
+              </p>
             )}
 
             {verdict && (

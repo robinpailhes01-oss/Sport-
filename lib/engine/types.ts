@@ -229,6 +229,23 @@ export const GOAL_LABELS: Record<Goal, string> = {
   physique: "Physique — masse musculaire",
 };
 
+/** Placement du calque musculaire sur une photo de scan, en % du cadre. */
+export interface ScanTransform {
+  /** Décalage horizontal / vertical, en % de la largeur / hauteur du cadre */
+  x: number;
+  y: number;
+  /** Facteurs d'échelle du calque, 1 = taille nominale */
+  scaleX: number;
+  scaleY: number;
+}
+
+export const DEFAULT_SCAN_TRANSFORM: ScanTransform = {
+  x: 0,
+  y: 0,
+  scaleX: 1,
+  scaleY: 1,
+};
+
 /** Profil opérateur — la racine de toute personnalisation (agents, ratios, atlas). */
 export interface OperatorProfile {
   heightCm: number | null;
@@ -237,6 +254,8 @@ export interface OperatorProfile {
   goal: Goal;
   constraints: string | null;
   timeBudgetMin: number;
+  /** Calage du calque par angle de scan — null tant que non calibré */
+  scanCalibration: Partial<Record<ScanAngle, ScanTransform>> | null;
 }
 
 export interface WeighIn {

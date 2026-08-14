@@ -85,6 +85,7 @@ const DEFAULT_PROFILE: OperatorProfile = {
   goal: "hybride-hyrox",
   constraints: null,
   timeBudgetMin: 60,
+  scanCalibration: null,
 };
 
 interface StoredBodyScan {
