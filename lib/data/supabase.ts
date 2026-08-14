@@ -14,7 +14,7 @@ import type {
   WeighIn,
   WorkoutTemplate,
 } from "@/lib/engine/types";
-import type { DataSource } from "./source";
+import type { DataSource, GeneratedSessionResult } from "./source";
 import * as actions from "./supabase-actions";
 
 // Implémentation réelle : chaque méthode délègue à une Server Action
@@ -145,5 +145,11 @@ export class SupabaseDataSource implements DataSource {
   }
   analyzeScan(date: string): Promise<ScanAnalysis | null> {
     return actions.analyzeScan(date);
+  }
+  generateTodaySession(): Promise<GeneratedSessionResult | null> {
+    return actions.generateTodaySession();
+  }
+  listGeneratedSessions(): Promise<GeneratedSessionResult[]> {
+    return actions.listGeneratedSessions();
   }
 }

@@ -46,7 +46,7 @@ import {
   TEMPLATES,
   seedWeeklyHistory,
 } from "./seed";
-import type { DataSource } from "./source";
+import type { DataSource, GeneratedSessionResult } from "./source";
 
 const STORAGE_KEY = "ascent-save-v1";
 
@@ -841,6 +841,16 @@ export class MockDataSource implements DataSource {
 
   async analyzeScan(): Promise<ScanAnalysis | null> {
     return null;
+  }
+
+  // Génération de séance : serveur requis (clé API). En local, pas de
+  // séance inventée — le programme statique reste la référence.
+  async generateTodaySession(): Promise<GeneratedSessionResult | null> {
+    return null;
+  }
+
+  async listGeneratedSessions(): Promise<GeneratedSessionResult[]> {
+    return [];
   }
 
   private mustGetRun(runId: string): Run {

@@ -7,6 +7,7 @@ import { agentReplies, type CommsAuthor, type CommsMessage } from "@/lib/engine/
 import { callCommsAi } from "@/lib/ai/comms-client";
 import type { CommsAiContext } from "@/lib/ai/comms-types";
 import { analyzeScanPhotos, type ScanPhoto } from "@/lib/ai/scan-analysis";
+import { generateSession } from "@/lib/ai/session-generator";
 import { MUSCLES } from "@/lib/engine/exercises";
 import { muscleZones, trackedExercises } from "@/lib/engine/strength";
 import {
@@ -146,13 +147,23 @@ export async function listTemplates(): Promise<WorkoutTemplate[]> {
 }
 
 export async function getTemplate(id: string): Promise<WorkoutTemplate | null> {
-  return TEMPLATES.find((t) => t.id === id) ?? null;
+  const stat = TEMPLATES.find((t) => t.id === id);
+  if (stat) return stat;
+
+  // Séance générée par un agent : elle vit en base, pas dans le code, mais
+  // l'écran de run ne fait aucune différence entre les deux.
+  const { data } = await supabaseAdmin()
+    .from("generated_sessions")
+    .select("template")
+    .eq("id", id)
+    .maybeSingle();
+  return (data?.template as WorkoutTemplate) ?? null;
 }
 
 export async function getTemplateBySlug(
   slug: string,
 ): Promise<WorkoutTemplate | null> {
-  return TEMPLATES.find((t) => t.slug === slug) ?? null;
+  return TEMPLATES.find((t) => t.slug === slug) ?? getTemplate(slug);
 }
 
 export async function getWeeklyXp(
@@ -1076,6 +1087,164 @@ export async function analyzeScan(date: string): Promise<ScanAnalysis | null> {
     crossCheck: result.crossCheck,
     createdAt: new Date().toISOString(),
   };
+}
+
+// ── Séances générées par les agents ──────────────────────────
+
+/**
+ * Le contexte unifié : tout ce que l'app sait de l'opérateur, en un texte.
+ * Une seule source pour tous les appels IA — si un agent raisonne mal, c'est
+ * ici qu'on regarde d'abord.
+ */
+export async function buildOperatorContext(): Promise<string> {
+  const [logs, weighIns, profile, seaDays, runs, journalValidated] =
+    await Promise.all([
+      listSetLogs(),
+      listWeighIns(),
+      getProfile(),
+      listSeaDays(),
+      supabaseAdmin()
+        .from("runs")
+        .select("template_id, status, completed_at")
+        .order("completed_at", { ascending: false })
+        .limit(20),
+      listValidatedDays(),
+    ]);
+
+  const day = dayOfProtocol(new Date());
+  const phase = phaseForDay(day);
+  const bodyweight = weighIns[0]?.weightKg ?? null;
+  const zones = muscleZones(logs);
+  const tracked = trackedExercises(logs);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const lines: string[] = [];
+
+  lines.push("### Profil");
+  lines.push(`- Objectif : ${profile.goal}`);
+  lines.push(`- Matériel disponible : ${profile.equipment}`);
+  lines.push(`- Budget temps : ${profile.timeBudgetMin} min MAXIMUM`);
+  if (bodyweight) lines.push(`- Poids de corps : ${bodyweight} kg`);
+  if (profile.heightCm) lines.push(`- Taille : ${profile.heightCm} cm`);
+  if (profile.constraints)
+    lines.push(`- Contraintes déclarées : ${profile.constraints}`);
+
+  lines.push(`\n### Protocole`);
+  lines.push(`- Jour ${day}/90, phase ${phase.name} — ${phase.focus}`);
+  if (seaDays.includes(today))
+    lines.push("- AUJOURD'HUI EST UN JOUR DE MER : temps et matériel limités.");
+
+  const completed = (runs.data ?? []).filter((r) => r.status === "completed");
+  const abandoned = (runs.data ?? []).filter((r) => r.status === "abandoned");
+  lines.push(
+    `\n### Adhérence (20 derniers runs)\n- ${completed.length} terminés, ${abandoned.length} abandonnés`,
+  );
+  lines.push(`- Journal validé sur ${journalValidated.length} jours`);
+  if (completed.length > 0) {
+    lines.push(
+      `- Dernières séances : ${completed.slice(0, 5).map((r) => r.template_id).join(", ")}`,
+    );
+  }
+
+  if (logs.length === 0) {
+    lines.push(
+      "\n### Force\nAUCUNE charge enregistrée. Propose des charges de découverte prudentes et demande-lui de caler ses repères.",
+    );
+  } else {
+    lines.push("\n### 1RM estimés (depuis séries réelles — plafond +5%)");
+    for (const t of tracked) {
+      lines.push(
+        `- ${t.exerciseKey} : ${t.e1rm.toFixed(1)} kg${
+          t.trendPct !== null ? ` (${t.trendPct > 0 ? "+" : ""}${t.trendPct.toFixed(0)}%)` : ""
+        }${t.stagnating ? " ⚠ STAGNE — change le schéma, pas la charge" : ""}`,
+      );
+    }
+
+    lines.push("\n### Volume par muscle sur 28 jours");
+    for (const z of zones) {
+      lines.push(
+        `- ${MUSCLES[z.muscle].label} : ${Math.round(z.tonnage)} kg — ${z.status}`,
+      );
+    }
+
+    const neglected = zones.filter((z) => z.status === "negligee");
+    if (neglected.length > 0) {
+      lines.push(
+        `\n### Zones à rattraper en priorité\n${neglected.map((z) => `- ${MUSCLES[z.muscle].label}`).join("\n")}`,
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export async function generateTodaySession(): Promise<{
+  template: WorkoutTemplate;
+  rationale: string;
+  author: string;
+} | null> {
+  const context = await buildOperatorContext();
+  const generated = await generateSession(context);
+  if (!generated) return null;
+
+  const id = `gen-${Date.now().toString(36)}`;
+  const template: WorkoutTemplate = {
+    id,
+    slug: id,
+    title: generated.title,
+    type: generated.type as WorkoutTemplate["type"],
+    durationMin: generated.durationMin,
+    primaryStat: generated.primaryStat as StatKey,
+    statWeights: generated.statWeights as WorkoutTemplate["statWeights"],
+    // XP calé sur la durée, comme les templates statiques — l'IA ne fixe pas
+    // la récompense elle-même, sinon elle pourrait inflater les gains.
+    baseXp: Math.round(generated.durationMin * 2),
+    blocks: generated.blocks.map((b) => ({
+      name: b.name,
+      detail: b.detail,
+      ...(b.exerciseKey ? { exerciseKey: b.exerciseKey } : {}),
+      ...(b.sets ? { sets: b.sets } : {}),
+      ...(b.repsTarget ? { repsTarget: b.repsTarget } : {}),
+    })),
+  };
+
+  const { error } = await supabaseAdmin().from("generated_sessions").insert({
+    id,
+    date: new Date().toISOString().slice(0, 10),
+    template,
+    rationale: generated.rationale,
+    author: generated.author,
+  });
+  if (error) {
+    // La séance ne peut pas être lancée si elle n'est pas persistée (le run
+    // résout son template par id). Message explicite plutôt qu'un échec muet
+    // après un appel IA facturé.
+    throw new Error(
+      /generated_sessions/.test(error.message)
+        ? "Table generated_sessions absente — lance la migration 0007."
+        : error.message,
+    );
+  }
+
+  return { template, rationale: generated.rationale, author: generated.author };
+}
+
+/** Séances générées récemment — la plus récente en premier. */
+export async function listGeneratedSessions(): Promise<
+  { template: WorkoutTemplate; rationale: string; author: string; date: string }[]
+> {
+  const { data, error } = await supabaseAdmin()
+    .from("generated_sessions")
+    .select("template, rationale, author, date")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (error) return [];
+  return (data ?? []).map((r) => ({
+    template: r.template as WorkoutTemplate,
+    rationale: r.rationale,
+    author: r.author,
+    date: r.date,
+  }));
 }
 
 /** Résumé texte du ledger d'entraînement — ce que l'IA croise avec la photo. */

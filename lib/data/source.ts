@@ -101,4 +101,17 @@ export interface DataSource {
   getScanAnalysis(date: string): Promise<ScanAnalysis | null>;
   /** Envoie les photos du jour à l'IA pour lecture visuelle croisée au ledger */
   analyzeScan(date: string): Promise<ScanAnalysis | null>;
+
+  /** Un agent écrit la séance du jour depuis tout ce que l'app sait de toi */
+  generateTodaySession(): Promise<GeneratedSessionResult | null>;
+  listGeneratedSessions(): Promise<GeneratedSessionResult[]>;
+}
+
+export interface GeneratedSessionResult {
+  template: WorkoutTemplate;
+  /** Pourquoi cette séance aujourd'hui, dans la voix du coach */
+  rationale: string;
+  /** goggins | robbins */
+  author: string;
+  date?: string;
 }

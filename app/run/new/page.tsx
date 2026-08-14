@@ -28,6 +28,39 @@ export default function NewRunPage() {
   const [run, setRun] = useState<Run | null>(null);
   const [brief, setBrief] = useState<{ coach: Coach; line: string } | null>(null);
   const [engaging, setEngaging] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generated, setGenerated] = useState<{
+    rationale: string;
+    author: string;
+  } | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+
+  async function generate() {
+    setGenerating(true);
+    setGenError(null);
+    try {
+      const result = await db().generateTodaySession();
+      if (!result) {
+        setGenError(
+          "Génération indisponible — vérifie que la clé IA est configurée côté serveur.",
+        );
+        return;
+      }
+      // La séance générée rejoint la liste et se sélectionne toute seule :
+      // l'écran de tirage fonctionne ensuite à l'identique.
+      setTemplates((prev) => [result.template, ...prev]);
+      setSelected(result.template);
+      setGenerated({ rationale: result.rationale, author: result.author });
+      setRun(null);
+      setBrief(null);
+    } catch (e) {
+      setGenError(
+        e instanceof Error ? e.message : "La génération a échoué. Réessaie.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   useEffect(() => {
     db()
@@ -71,6 +104,38 @@ export default function NewRunPage() {
           <h1 className="font-display text-2xl font-bold uppercase tracking-wider">
             Prépare le tirage
           </h1>
+        </Rise>
+
+        {/* ── 0. SÉANCE GÉNÉRÉE PAR UN AGENT ── */}
+        <Rise>
+          <Panel tone="volt" className="p-4">
+            <p className="hud-label mb-1 text-volt">Séance sur mesure</p>
+            <p className="text-xs leading-relaxed text-ink-dim">
+              Un coach écrit ta séance du jour à partir de tes charges réelles,
+              tes zones en retard, ton matériel et ton temps disponible.
+            </p>
+            <Button
+              size="md"
+              className="mt-3 w-full"
+              disabled={generating}
+              onClick={generate}
+            >
+              {generating ? "Le coach réfléchit…" : "Générer ma séance"}
+            </Button>
+            {genError && (
+              <p className="mt-2 font-mono text-[11px] text-danger">{genError}</p>
+            )}
+            {generated && (
+              <div className="mt-3 border-t border-line pt-3">
+                <p className="hud-label mb-1">
+                  {generated.author === "goggins" ? "The Savage" : "The Strategist"}
+                </p>
+                <p className="text-xs leading-relaxed text-ink">
+                  {generated.rationale}
+                </p>
+              </div>
+            )}
+          </Panel>
         </Rise>
 
         {/* ── 1. LA SÉANCE ── */}
