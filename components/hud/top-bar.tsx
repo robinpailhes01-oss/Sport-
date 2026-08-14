@@ -31,6 +31,13 @@ export function TopBar({
             </span>
           </>
         )}
+        <Link
+          href="/profil"
+          className="transition-colors hover:text-ink-dim"
+          aria-label="Profil opérateur"
+        >
+          ◈
+        </Link>
         <Link href="/reglages" className="transition-colors hover:text-ink-dim" aria-label="Réglages">
           ⚙
         </Link>

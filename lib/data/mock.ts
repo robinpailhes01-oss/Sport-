@@ -16,13 +16,16 @@ import {
   STAT_KEYS,
   type AvatarState,
   type BodyScan,
+  type OperatorProfile,
   type PersonalRecord,
   type Run,
   type RunPerformance,
   type SavingsEntry,
   type ScanAngle,
+  type SetLog,
   type StatKey,
   type StatState,
+  type WeighIn,
   type WorkoutTemplate,
   type XpEvent,
 } from "@/lib/engine/types";
@@ -64,12 +67,25 @@ interface SaveState {
   comms: CommsMessage[];
   /** Photos de scan stockées en dataURL — mode local uniquement, taille limitée */
   bodyScans: StoredBodyScan[];
+  profile: OperatorProfile;
+  weighIns: WeighIn[];
+  setLogs: SetLog[];
   nextEventId: number;
   nextRecordId: number;
   nextSavingsId: number;
   nextCommsId: number;
   nextScanId: number;
+  nextSetLogId: number;
 }
+
+const DEFAULT_PROFILE: OperatorProfile = {
+  heightCm: null,
+  birthdate: null,
+  equipment: "gym",
+  goal: "hybride-hyrox",
+  constraints: null,
+  timeBudgetMin: 60,
+};
 
 interface StoredBodyScan {
   id: number;
@@ -114,6 +130,10 @@ export class MockDataSource implements DataSource {
           state.trainingTimes ??= {};
           state.bodyScans ??= [];
           state.nextScanId ??= 1;
+          state.profile ??= { ...DEFAULT_PROFILE };
+          state.weighIns ??= [];
+          state.setLogs ??= [];
+          state.nextSetLogId ??= 1;
           return state;
         }
       } catch {
@@ -184,11 +204,15 @@ export class MockDataSource implements DataSource {
       savings,
       comms: [],
       bodyScans: [],
+      profile: { ...DEFAULT_PROFILE },
+      weighIns: [],
+      setLogs: [],
       nextEventId: id,
       nextRecordId,
       nextSavingsId,
       nextCommsId: 1,
       nextScanId: 1,
+      nextSetLogId: 1,
     };
   }
 
@@ -704,12 +728,73 @@ export class MockDataSource implements DataSource {
       savings: [],
       comms: [],
       bodyScans: this.state.bodyScans,
+      // Le profil survit au reset : taille et objectif ne sont pas de la
+      // progression. Les pesées et les séries, si — elles repartent à zéro.
+      profile: this.state.profile,
+      weighIns: [],
+      setLogs: [],
       nextEventId: 1,
       nextRecordId: 1,
       nextSavingsId: 1,
       nextCommsId: 1,
       nextScanId: this.state.nextScanId,
+      nextSetLogId: 1,
     };
+    this.persist();
+  }
+
+  async getProfile(): Promise<OperatorProfile> {
+    return { ...this.state.profile };
+  }
+
+  async setProfile(patch: Partial<OperatorProfile>): Promise<OperatorProfile> {
+    this.state.profile = { ...this.state.profile, ...patch };
+    this.persist();
+    return { ...this.state.profile };
+  }
+
+  async listWeighIns(): Promise<WeighIn[]> {
+    return [...this.state.weighIns].sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  async addWeighIn(date: string, weightKg: number): Promise<void> {
+    this.state.weighIns = this.state.weighIns.filter((w) => w.date !== date);
+    this.state.weighIns.push({ date, weightKg });
+    this.persist();
+  }
+
+  async listSetLogs(days = 120): Promise<SetLog[]> {
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    return this.state.setLogs
+      .filter((s) => s.date >= since)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  async saveSetLogs(
+    runId: string,
+    exerciseKey: string,
+    date: string,
+    sets: { weightKg: number; reps: number; rpe?: number | null }[],
+  ): Promise<void> {
+    this.state.setLogs = this.state.setLogs.filter(
+      (s) => !(s.runId === runId && s.exerciseKey === exerciseKey),
+    );
+    sets
+      .filter((s) => s.weightKg > 0 && s.reps > 0)
+      .forEach((s, i) => {
+        this.state.setLogs.push({
+          id: this.state.nextSetLogId++,
+          runId,
+          exerciseKey,
+          setIndex: i,
+          weightKg: s.weightKg,
+          reps: s.reps,
+          rpe: s.rpe ?? null,
+          date,
+        });
+      });
     this.persist();
   }
 

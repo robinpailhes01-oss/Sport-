@@ -19,13 +19,18 @@ import {
   STAT_KEYS,
   type AvatarState,
   type BodyScan,
+  type Equipment,
+  type Goal,
+  type OperatorProfile,
   type PersonalRecord,
   type Run,
   type RunPerformance,
   type SavingsEntry,
   type ScanAngle,
+  type SetLog,
   type StatKey,
   type StatState,
+  type WeighIn,
   type WorkoutTemplate,
   type XpEvent,
 } from "@/lib/engine/types";
@@ -769,6 +774,125 @@ async function commsReplies(
 export async function resetProtocol(): Promise<void> {
   const { error } = await supabaseAdmin().rpc("reset_ascent_protocol");
   bail(error);
+}
+
+// ── Profil, pesées, séries ───────────────────────────────────
+
+const DEFAULT_PROFILE: OperatorProfile = {
+  heightCm: null,
+  birthdate: null,
+  equipment: "gym",
+  goal: "hybride-hyrox",
+  constraints: null,
+  timeBudgetMin: 60,
+};
+
+export async function getProfile(): Promise<OperatorProfile> {
+  const { data, error } = await supabaseAdmin()
+    .from("operator_profile")
+    .select("height_cm, birthdate, equipment, goal, constraints, time_budget_min")
+    .eq("id", 1)
+    .maybeSingle();
+  bail(error);
+  if (!data) return DEFAULT_PROFILE;
+  return {
+    heightCm: data.height_cm,
+    birthdate: data.birthdate,
+    equipment: data.equipment as Equipment,
+    goal: data.goal as Goal,
+    constraints: data.constraints,
+    timeBudgetMin: data.time_budget_min,
+  };
+}
+
+export async function setProfile(
+  patch: Partial<OperatorProfile>,
+): Promise<OperatorProfile> {
+  const current = await getProfile();
+  const next = { ...current, ...patch };
+  const { error } = await supabaseAdmin().from("operator_profile").upsert({
+    id: 1,
+    height_cm: next.heightCm,
+    birthdate: next.birthdate,
+    equipment: next.equipment,
+    goal: next.goal,
+    constraints: next.constraints,
+    time_budget_min: next.timeBudgetMin,
+    updated_at: new Date().toISOString(),
+  });
+  bail(error);
+  return next;
+}
+
+export async function listWeighIns(): Promise<WeighIn[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("weigh_ins")
+    .select("date, weight_kg")
+    .order("date", { ascending: false });
+  bail(error);
+  return (data ?? []).map((w) => ({ date: w.date, weightKg: Number(w.weight_kg) }));
+}
+
+export async function addWeighIn(date: string, weightKg: number): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("weigh_ins")
+    .upsert({ date, weight_kg: weightKg }, { onConflict: "date" });
+  bail(error);
+}
+
+export async function listSetLogs(days = 120): Promise<SetLog[]> {
+  const since = new Date(Date.now() - days * 24 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  const { data, error } = await supabaseAdmin()
+    .from("set_logs")
+    .select("id, run_id, exercise_key, set_index, weight_kg, reps, rpe, date")
+    .gte("date", since)
+    .order("date", { ascending: false });
+  bail(error);
+  return (data ?? []).map((s) => ({
+    id: s.id,
+    runId: s.run_id,
+    exerciseKey: s.exercise_key,
+    setIndex: s.set_index,
+    weightKg: Number(s.weight_kg),
+    reps: s.reps,
+    rpe: s.rpe,
+    date: s.date,
+  }));
+}
+
+export async function saveSetLogs(
+  runId: string,
+  exerciseKey: string,
+  date: string,
+  sets: { weightKg: number; reps: number; rpe?: number | null }[],
+): Promise<void> {
+  const admin = supabaseAdmin();
+  // Idempotent : on remplace les séries de cet exercice pour ce run, pour
+  // qu'une correction en cours de séance ne crée pas de doublons.
+  const { error: e1 } = await admin
+    .from("set_logs")
+    .delete()
+    .eq("run_id", runId)
+    .eq("exercise_key", exerciseKey);
+  bail(e1);
+
+  const rows = sets
+    .filter((s) => s.weightKg > 0 && s.reps > 0)
+    .map((s, i) => ({
+      run_id: runId,
+      exercise_key: exerciseKey,
+      set_index: i,
+      weight_kg: s.weightKg,
+      reps: s.reps,
+      rpe: s.rpe ?? null,
+      date,
+    }));
+  if (rows.length === 0) return;
+
+  const { error: e2 } = await admin.from("set_logs").insert(rows);
+  bail(e2);
 }
 
 // ── Scans corporels ──────────────────────────────────────────

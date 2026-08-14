@@ -21,11 +21,11 @@ export const TEMPLATES: WorkoutTemplate[] = [
     statWeights: { force: 0.8, mental: 0.2 },
     baseXp: 120,
     blocks: [
-      { name: "A. Back Squat", detail: "5 × 3 @ 80–85% — repos 3 min, barre explosive" },
-      { name: "B. Romanian Deadlift", detail: "3 × 6 @ RPE 8 — hanches, pas de dos rond" },
-      { name: "C. Bulgarian Split Squat", detail: "3 × 8 / jambe — tempo 2-0-1" },
-      { name: "D. Farmer Carry", detail: "4 × 40 m lourd — grip et gainage" },
-      { name: "E. Core", detail: "3 tours : Pallof press 12 + ab wheel 10" },
+      { name: "A. Back Squat", detail: "5 × 3 @ 80–85% — repos 3 min, barre explosive", exerciseKey: "back-squat", sets: 5, repsTarget: 3 },
+      { name: "B. Romanian Deadlift", detail: "3 × 6 @ RPE 8 — hanches, pas de dos rond", exerciseKey: "romanian-deadlift", sets: 3, repsTarget: 6 },
+      { name: "C. Bulgarian Split Squat", detail: "3 × 8 / jambe — tempo 2-0-1", exerciseKey: "bulgarian-split-squat", sets: 3, repsTarget: 8 },
+      { name: "D. Farmer Carry", detail: "4 × 40 m lourd — grip et gainage", exerciseKey: "farmer-carry", sets: 4, repsTarget: 40 },
+      { name: "E. Core", detail: "3 tours : Pallof press 12 + ab wheel 10", exerciseKey: "pallof-press", sets: 3, repsTarget: 12 },
     ],
   },
   {
@@ -38,11 +38,11 @@ export const TEMPLATES: WorkoutTemplate[] = [
     statWeights: { force: 0.75, skill: 0.1, mental: 0.15 },
     baseXp: 120,
     blocks: [
-      { name: "A. Strict Press", detail: "5 × 3 @ 80–85% — gainage total, zéro chandelle" },
-      { name: "B. Tractions lestées", detail: "4 × 5 — full ROM, contrôle en descente" },
-      { name: "C. Dips lestés", detail: "3 × 8" },
-      { name: "D. Rowing unilatéral", detail: "3 × 10 / bras — coude au corps" },
-      { name: "E. Hollow / Arch", detail: "3 × (30s + 30s) — transfert gymnastique" },
+      { name: "A. Strict Press", detail: "5 × 3 @ 80–85% — gainage total, zéro chandelle", exerciseKey: "strict-press", sets: 5, repsTarget: 3 },
+      { name: "B. Tractions lestées", detail: "4 × 5 — full ROM, contrôle en descente", exerciseKey: "pull-up", sets: 4, repsTarget: 5 },
+      { name: "C. Dips lestés", detail: "3 × 8", exerciseKey: "dips", sets: 3, repsTarget: 8 },
+      { name: "D. Rowing unilatéral", detail: "3 × 10 / bras — coude au corps", exerciseKey: "single-arm-row", sets: 3, repsTarget: 10 },
+      { name: "E. Hollow / Arch", detail: "3 × (30s + 30s) — transfert gymnastique", exerciseKey: "hollow-arch", sets: 3, repsTarget: 30 },
     ],
   },
   {

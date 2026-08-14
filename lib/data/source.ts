@@ -2,12 +2,15 @@ import type { CommsMessage } from "@/lib/engine/comms";
 import type {
   AvatarState,
   BodyScan,
+  OperatorProfile,
   PersonalRecord,
   Run,
   RunPerformance,
   SavingsEntry,
   ScanAngle,
+  SetLog,
   StatKey,
+  WeighIn,
   WorkoutTemplate,
 } from "@/lib/engine/types";
 
@@ -67,6 +70,25 @@ export interface DataSource {
 
   /** Efface tout : XP, records, journal, épargne, comms. Repart à zéro, irréversible. */
   resetProtocol(): Promise<void>;
+
+  /** Profil opérateur — racine de la personnalisation (ratios, agents, atlas) */
+  getProfile(): Promise<OperatorProfile>;
+  setProfile(profile: Partial<OperatorProfile>): Promise<OperatorProfile>;
+
+  /** Pesées, de la plus récente à la plus ancienne */
+  listWeighIns(): Promise<WeighIn[]>;
+  /** Une pesée par date — ré-enregistrer le même jour écrase */
+  addWeighIn(date: string, weightKg: number): Promise<void>;
+
+  /** Séries réellement effectuées — alimente e1RM, tonnage et agents */
+  listSetLogs(days?: number): Promise<SetLog[]>;
+  /** Remplace les séries d'un exercice pour un run donné (saisie idempotente) */
+  saveSetLogs(
+    runId: string,
+    exerciseKey: string,
+    date: string,
+    sets: { weightKg: number; reps: number; rpe?: number | null }[],
+  ): Promise<void>;
 
   /** Tous les scans, du plus récent au plus ancien — url signée/temporaire, jamais publique */
   listBodyScans(): Promise<BodyScan[]>;

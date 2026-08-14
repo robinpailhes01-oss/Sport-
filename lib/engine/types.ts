@@ -78,6 +78,13 @@ export const WORKOUT_TYPE_LABELS: Record<WorkoutType, string> = {
 export interface WorkoutBlock {
   name: string;
   detail: string;
+  /** Exercice chargé lié (lib/engine/exercises.ts) — active la saisie
+   *  séries × reps × kg. Absent = simple coche, comme avant. */
+  exerciseKey?: string;
+  /** Séries attendues — pré-remplit la grille de saisie */
+  sets?: number;
+  /** Reps cibles par série — base de la progression double */
+  repsTarget?: number;
 }
 
 export interface WorkoutTemplate {
@@ -205,6 +212,50 @@ export interface AvatarState {
   /** 0..100 — chaque stat plafonne sa contribution à 20 points */
   score: number;
   recentEvents: XpEvent[];
+}
+
+export type Equipment = "gym" | "bateau" | "minimal";
+export type Goal = "hybride-hyrox" | "force" | "physique";
+
+export const EQUIPMENT_LABELS: Record<Equipment, string> = {
+  gym: "Salle complète",
+  bateau: "À bord — poids de corps + élastiques",
+  minimal: "Minimal — haltères + barre de traction",
+};
+
+export const GOAL_LABELS: Record<Goal, string> = {
+  "hybride-hyrox": "Hybride — Hyrox / CrossFit",
+  force: "Force maximale",
+  physique: "Physique — masse musculaire",
+};
+
+/** Profil opérateur — la racine de toute personnalisation (agents, ratios, atlas). */
+export interface OperatorProfile {
+  heightCm: number | null;
+  birthdate: string | null;
+  equipment: Equipment;
+  goal: Goal;
+  constraints: string | null;
+  timeBudgetMin: number;
+}
+
+export interface WeighIn {
+  /** ISO yyyy-mm-dd */
+  date: string;
+  weightKg: number;
+}
+
+/** Une série réellement effectuée — la brique de l'atlas et des e1RM. */
+export interface SetLog {
+  id: number;
+  runId: string | null;
+  exerciseKey: string;
+  setIndex: number;
+  weightKg: number;
+  reps: number;
+  rpe: number | null;
+  /** ISO yyyy-mm-dd */
+  date: string;
 }
 
 export type ScanAngle = "face" | "profil" | "dos";

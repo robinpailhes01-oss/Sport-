@@ -9,8 +9,31 @@ import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { db } from "@/lib/data";
 import { RISK_TIERS } from "@/lib/engine/run-generator";
-import type { Run, WorkoutTemplate } from "@/lib/engine/types";
+import { SetLogger, type DraftSet } from "@/components/game/set-logger";
+import { suggestNextSet } from "@/lib/engine/strength";
+import type { Run, SetLog, WorkoutTemplate } from "@/lib/engine/types";
 import { cn } from "@/lib/utils";
+
+/** Séries pré-remplies d'un bloc : dernière perf + surcharge suggérée. */
+function draftFor(
+  block: { exerciseKey?: string; sets?: number; repsTarget?: number },
+  logs: SetLog[],
+): { sets: DraftSet[]; suggestion: string | null } {
+  const count = block.sets ?? 3;
+  const reps = block.repsTarget ?? 5;
+  const proposal = block.exerciseKey
+    ? suggestNextSet(block.exerciseKey, reps, logs)
+    : null;
+
+  return {
+    sets: Array.from({ length: count }, () => ({
+      weightKg: proposal?.weightKg ?? 0,
+      reps: proposal?.reps ?? reps,
+      done: false,
+    })),
+    suggestion: proposal?.reason ?? "Première fois — saisis ta charge de départ",
+  };
+}
 
 function useElapsed(startedAt?: string) {
   const [now, setNow] = useState(() => Date.now());
@@ -33,6 +56,10 @@ export default function ActiveRunPage({ params }: { params: { id: string } }) {
   const [modifiersHonored, setModifiersHonored] = useState<boolean[]>([]);
   const [rpe, setRpe] = useState(7);
   const [submitting, setSubmitting] = useState(false);
+  /** index du bloc → séries en cours de saisie */
+  const [drafts, setDrafts] = useState<Record<number, DraftSet[]>>({});
+  const [suggestions, setSuggestions] = useState<Record<number, string | null>>({});
+  const [openBlock, setOpenBlock] = useState<number | null>(null);
 
   const elapsed = useElapsed(run?.startedAt);
 
@@ -46,6 +73,20 @@ export default function ActiveRunPage({ params }: { params: { id: string } }) {
       setTemplate(tpl);
       setBlocksDone(tpl ? tpl.blocks.map(() => false) : []);
       setModifiersHonored(r.modifiers.map(() => true));
+
+      if (tpl) {
+        const logs = await db().listSetLogs();
+        const nextDrafts: Record<number, DraftSet[]> = {};
+        const nextSuggestions: Record<number, string | null> = {};
+        tpl.blocks.forEach((block, i) => {
+          if (!block.exerciseKey) return;
+          const { sets, suggestion } = draftFor(block, logs);
+          nextDrafts[i] = sets;
+          nextSuggestions[i] = suggestion;
+        });
+        setDrafts(nextDrafts);
+        setSuggestions(nextSuggestions);
+      }
     })();
   }, [params.id, router]);
 
@@ -59,10 +100,35 @@ export default function ActiveRunPage({ params }: { params: { id: string } }) {
   const tier = RISK_TIERS[run.riskTier];
 
   async function finish() {
-    if (!run) return;
+    if (!run || !template) return;
     setSubmitting(true);
+
+    // Les séries validées partent en base AVANT la clôture du run : c'est
+    // cette donnée qui nourrira l'atlas et les agents, elle ne doit jamais
+    // se perdre au profit du seul XP.
+    const date = new Date().toISOString().slice(0, 10);
+    for (const [index, sets] of Object.entries(drafts)) {
+      const block = template.blocks[Number(index)];
+      if (!block?.exerciseKey) continue;
+      const validated = sets.filter((s) => s.done && s.weightKg > 0 && s.reps > 0);
+      if (validated.length === 0) continue;
+      await db().saveSetLogs(
+        run.id,
+        block.exerciseKey,
+        date,
+        validated.map((s) => ({ weightKg: s.weightKg, reps: s.reps, rpe })),
+      );
+    }
+
     await db().completeRun(run.id, { blocksDone, modifiersHonored, rpe });
     router.push(`/run/${run.id}/recap`);
+  }
+
+  /** Valider toutes les séries d'un bloc coche le bloc automatiquement. */
+  function updateDraft(index: number, sets: DraftSet[]) {
+    setDrafts((prev) => ({ ...prev, [index]: sets }));
+    const allDone = sets.length > 0 && sets.every((s) => s.done);
+    setBlocksDone((prev) => prev.map((v, j) => (j === index ? allDone : v)));
   }
 
   return (
@@ -137,45 +203,72 @@ export default function ActiveRunPage({ params }: { params: { id: string } }) {
           <div className="space-y-2">
             {template.blocks.map((block, i) => {
               const done = blocksDone[i];
+              const loggable = Boolean(block.exerciseKey && drafts[i]);
+              const isOpen = openBlock === i;
+              const validatedCount = loggable
+                ? drafts[i].filter((s) => s.done).length
+                : 0;
+
               return (
-                <motion.button
+                <div
                   key={i}
-                  type="button"
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() =>
-                    setBlocksDone((prev) => prev.map((v, j) => (j === i ? !v : v)))
-                  }
                   className={cn(
-                    "flex w-full items-center gap-3 border p-3.5 text-left transition-colors",
-                    done
-                      ? "border-volt/50 bg-volt-faint"
-                      : "border-line hover:border-line-bright",
+                    "border transition-colors",
+                    done ? "border-volt/50 bg-volt-faint" : "border-line",
                   )}
                 >
-                  <span
-                    className={cn(
-                      "flex h-6 w-6 shrink-0 items-center justify-center border font-mono text-[10px] font-bold",
-                      done
-                        ? "border-volt bg-volt text-void"
-                        : "border-line-bright text-ink-mute",
-                    )}
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() =>
+                      loggable
+                        ? setOpenBlock(isOpen ? null : i)
+                        : setBlocksDone((prev) =>
+                            prev.map((v, j) => (j === i ? !v : v)),
+                          )
+                    }
+                    className="flex w-full items-center gap-3 p-3.5 text-left"
                   >
-                    {done ? "✓" : i + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p
+                    <span
                       className={cn(
-                        "font-display text-sm font-bold uppercase tracking-wide",
-                        done && "text-volt",
+                        "flex h-6 w-6 shrink-0 items-center justify-center border font-mono text-[10px] font-bold",
+                        done
+                          ? "border-volt bg-volt text-void"
+                          : "border-line-bright text-ink-mute",
                       )}
                     >
-                      {block.name}
-                    </p>
-                    <p className="mt-0.5 truncate font-mono text-[11px] text-ink-dim">
-                      {block.detail}
-                    </p>
-                  </div>
-                </motion.button>
+                      {done ? "✓" : i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          "font-display text-sm font-bold uppercase tracking-wide",
+                          done && "text-volt",
+                        )}
+                      >
+                        {block.name}
+                      </p>
+                      <p className="mt-0.5 truncate font-mono text-[11px] text-ink-dim">
+                        {block.detail}
+                      </p>
+                    </div>
+                    {loggable && (
+                      <span className="shrink-0 font-mono text-[10px] tracking-micro text-ink-mute">
+                        {validatedCount}/{drafts[i].length} {isOpen ? "▴" : "▾"}
+                      </span>
+                    )}
+                  </motion.button>
+
+                  {loggable && isOpen && (
+                    <div className="border-t border-line px-3 pb-3 pt-2.5">
+                      <SetLogger
+                        sets={drafts[i]}
+                        suggestion={suggestions[i] ?? null}
+                        onChange={(sets) => updateDraft(i, sets)}
+                      />
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

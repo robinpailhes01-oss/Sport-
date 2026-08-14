@@ -2,12 +2,15 @@ import type { CommsMessage } from "@/lib/engine/comms";
 import type {
   AvatarState,
   BodyScan,
+  OperatorProfile,
   PersonalRecord,
   Run,
   RunPerformance,
   SavingsEntry,
   ScanAngle,
+  SetLog,
   StatKey,
+  WeighIn,
   WorkoutTemplate,
 } from "@/lib/engine/types";
 import type { DataSource } from "./source";
@@ -103,6 +106,29 @@ export class SupabaseDataSource implements DataSource {
   }
   resetProtocol(): Promise<void> {
     return actions.resetProtocol();
+  }
+  getProfile(): Promise<OperatorProfile> {
+    return actions.getProfile();
+  }
+  setProfile(profile: Partial<OperatorProfile>): Promise<OperatorProfile> {
+    return actions.setProfile(profile);
+  }
+  listWeighIns(): Promise<WeighIn[]> {
+    return actions.listWeighIns();
+  }
+  addWeighIn(date: string, weightKg: number): Promise<void> {
+    return actions.addWeighIn(date, weightKg);
+  }
+  listSetLogs(days?: number): Promise<SetLog[]> {
+    return actions.listSetLogs(days);
+  }
+  saveSetLogs(
+    runId: string,
+    exerciseKey: string,
+    date: string,
+    sets: { weightKg: number; reps: number; rpe?: number | null }[],
+  ): Promise<void> {
+    return actions.saveSetLogs(runId, exerciseKey, date, sets);
   }
   listBodyScans(): Promise<BodyScan[]> {
     return actions.listBodyScans();
