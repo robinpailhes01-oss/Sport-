@@ -279,6 +279,18 @@ export interface SetLog {
 
 export type ScanAngle = "face" | "profil" | "dos";
 
+/** Lecture visuelle d'un scan par l'IA, croisée avec le ledger d'entraînement. */
+export interface ScanAnalysis {
+  /** date du scan analysé (ISO yyyy-mm-dd) */
+  date: string;
+  summary: string;
+  developed: string[];
+  toWork: { zone: string; why: string }[];
+  posture: string | null;
+  crossCheck: string | null;
+  createdAt: string;
+}
+
 export interface BodyScan {
   id: number;
   /** ISO yyyy-mm-dd */

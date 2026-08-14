@@ -9,8 +9,17 @@ import { Panel } from "@/components/ui/panel";
 import { CaptureSlot } from "@/components/scans/capture-slot";
 import { CameraCapture } from "@/components/scans/camera-capture";
 import { CompareSlider } from "@/components/scans/compare-slider";
+import { ScanReport } from "@/components/scans/scan-report";
+import { EvolutionVideo } from "@/components/scans/evolution-video";
 import { db } from "@/lib/data";
-import { STAT_KEYS, STATS, type AvatarState, type BodyScan, type ScanAngle } from "@/lib/engine/types";
+import {
+  STAT_KEYS,
+  STATS,
+  type AvatarState,
+  type BodyScan,
+  type ScanAnalysis,
+  type ScanAngle,
+} from "@/lib/engine/types";
 import { cn } from "@/lib/utils";
 
 const ANGLES: { key: ScanAngle; label: string }[] = [
@@ -69,6 +78,9 @@ export default function ScansPage() {
   const [error, setError] = useState<string | null>(null);
   const [priorityLabel, setPriorityLabel] = useState<string | null>(null);
 
+  const [analysis, setAnalysis] = useState<ScanAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
   const [activeCamera, setActiveCamera] = useState<ScanAngle | null>(null);
   const fallbackInputRef = useRef<HTMLInputElement>(null);
   const fallbackAngleRef = useRef<ScanAngle | null>(null);
@@ -107,6 +119,27 @@ export default function ScansPage() {
   async function refresh() {
     const list = await db().listBodyScans();
     setScans(list);
+    // Analyse la plus récente disponible — celle du dernier jour scanné.
+    const latestDate = list[0]?.date;
+    setAnalysis(latestDate ? await db().getScanAnalysis(latestDate) : null);
+  }
+
+  async function runAnalysis(date: string) {
+    setAnalyzing(true);
+    setError(null);
+    try {
+      const result = await db().analyzeScan(date);
+      if (!result) {
+        setError(
+          "Analyse indisponible — vérifie que la clé IA est configurée côté serveur.",
+        );
+      }
+      setAnalysis(result);
+    } catch {
+      setError("L'analyse a échoué. Réessaie dans un moment.");
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   const byDate = new Map<string, Partial<Record<ScanAngle, BodyScan>>>();
@@ -228,6 +261,36 @@ export default function ScansPage() {
           </Panel>
         </Rise>
 
+        {/* ── ANALYSE IA ── */}
+        {dates.length > 0 && (
+          <Rise>
+            {analysis && analysis.date === dates[0] ? (
+              <ScanReport analysis={analysis} />
+            ) : (
+              <Panel className="p-4">
+                <p className="hud-label mb-2">Analyse morphologique</p>
+                <p className="text-xs leading-relaxed text-ink-dim">
+                  L&apos;IA regarde tes photos du {frDate(dates[0])} et croise ce
+                  qu&apos;elle voit avec tes charges enregistrées : ce qui
+                  ressort, ce qui est en retard, et pourquoi.
+                </p>
+                <Button
+                  size="md"
+                  className="mt-3 w-full"
+                  disabled={analyzing}
+                  onClick={() => runAnalysis(dates[0])}
+                >
+                  {analyzing ? "Analyse en cours…" : "Lancer l'analyse"}
+                </Button>
+                <p className="mt-2 text-center font-mono text-[10px] leading-relaxed text-ink-mute">
+                  Tes photos sont transmises à l&apos;IA le temps de
+                  l&apos;analyse, puis restent dans ton stockage privé.
+                </p>
+              </Panel>
+            )}
+          </Rise>
+        )}
+
         {/* ── CHRONOLOGIE ── */}
         {dates.length > 0 && (
           <Rise>
@@ -269,6 +332,13 @@ export default function ScansPage() {
                 })}
               </div>
             </Panel>
+          </Rise>
+        )}
+
+        {/* ── VIDÉO D'ÉVOLUTION ── */}
+        {dates.length > 0 && (
+          <Rise>
+            <EvolutionVideo scans={scans} />
           </Rise>
         )}
 

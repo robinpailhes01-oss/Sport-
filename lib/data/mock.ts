@@ -21,6 +21,7 @@ import {
   type Run,
   type RunPerformance,
   type SavingsEntry,
+  type ScanAnalysis,
   type ScanAngle,
   type SetLog,
   type StatKey,
@@ -830,6 +831,16 @@ export class MockDataSource implements DataSource {
   async deleteBodyScan(id: number): Promise<void> {
     this.state.bodyScans = this.state.bodyScans.filter((s) => s.id !== id);
     this.persist();
+  }
+
+  // L'analyse vision exige un serveur (clé API, téléchargement des photos).
+  // En mode local on ne simule rien : pas d'analyse plutôt qu'une fausse.
+  async getScanAnalysis(): Promise<ScanAnalysis | null> {
+    return null;
+  }
+
+  async analyzeScan(): Promise<ScanAnalysis | null> {
+    return null;
   }
 
   private mustGetRun(runId: string): Run {

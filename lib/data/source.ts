@@ -7,6 +7,7 @@ import type {
   Run,
   RunPerformance,
   SavingsEntry,
+  ScanAnalysis,
   ScanAngle,
   SetLog,
   StatKey,
@@ -95,4 +96,9 @@ export interface DataSource {
   /** dataUrl = "data:image/jpeg;base64,...", capturé côté client */
   addBodyScan(date: string, angle: ScanAngle, dataUrl: string): Promise<BodyScan>;
   deleteBodyScan(id: number): Promise<void>;
+
+  /** Analyse IA déjà calculée pour une date de scan, null si jamais lancée */
+  getScanAnalysis(date: string): Promise<ScanAnalysis | null>;
+  /** Envoie les photos du jour à l'IA pour lecture visuelle croisée au ledger */
+  analyzeScan(date: string): Promise<ScanAnalysis | null>;
 }

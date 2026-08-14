@@ -7,6 +7,7 @@ import type {
   Run,
   RunPerformance,
   SavingsEntry,
+  ScanAnalysis,
   ScanAngle,
   SetLog,
   StatKey,
@@ -138,5 +139,11 @@ export class SupabaseDataSource implements DataSource {
   }
   deleteBodyScan(id: number): Promise<void> {
     return actions.deleteBodyScan(id);
+  }
+  getScanAnalysis(date: string): Promise<ScanAnalysis | null> {
+    return actions.getScanAnalysis(date);
+  }
+  analyzeScan(date: string): Promise<ScanAnalysis | null> {
+    return actions.analyzeScan(date);
   }
 }

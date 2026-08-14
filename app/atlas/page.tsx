@@ -238,6 +238,9 @@ export default function AtlasPage() {
                   onSelect={setSelected}
                   scanKey={`${scanForView.id}-${calibrating}`}
                 />
+                {/* Le calage fin reste possible, mais discret : ce n'est pas
+                    l'intérêt de l'écran, juste un rattrapage si le cadrage
+                    de la photo est très différent de la pose guide. */}
                 {calibrating ? (
                   <>
                     <CalibrationControls
@@ -253,11 +256,16 @@ export default function AtlasPage() {
                   <button
                     type="button"
                     onClick={() => setCalibrating(true)}
-                    className="mt-2 w-full border border-line py-2 font-mono text-[10px] uppercase tracking-wide text-ink-mute transition-colors hover:border-line-bright"
+                    className="mt-2 w-full py-1.5 font-mono text-[9px] uppercase tracking-micro text-ink-mute/70 transition-colors hover:text-ink-mute"
                   >
-                    ⊹ Caler le calque sur ton corps
+                    ajuster le calque
                   </button>
                 )}
+                <Link href="/scans" className="mt-2 block">
+                  <Button variant="ghost" size="sm" className="w-full" tabIndex={-1}>
+                    Voir l&apos;analyse IA de ce scan →
+                  </Button>
+                </Link>
               </>
             ) : (
               <div className="relative mx-auto aspect-[1/2] w-full max-w-[240px]">

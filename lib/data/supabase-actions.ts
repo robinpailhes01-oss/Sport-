@@ -6,6 +6,9 @@ import { statStateFromXp, totalScore } from "@/lib/engine/xp";
 import { agentReplies, type CommsAuthor, type CommsMessage } from "@/lib/engine/comms";
 import { callCommsAi } from "@/lib/ai/comms-client";
 import type { CommsAiContext } from "@/lib/ai/comms-types";
+import { analyzeScanPhotos, type ScanPhoto } from "@/lib/ai/scan-analysis";
+import { MUSCLES } from "@/lib/engine/exercises";
+import { muscleZones, trackedExercises } from "@/lib/engine/strength";
 import {
   FULL_JOURNAL_BONUS,
   HABITS,
@@ -26,6 +29,7 @@ import {
   type Run,
   type RunPerformance,
   type SavingsEntry,
+  type ScanAnalysis,
   type ScanAngle,
   type SetLog,
   type StatKey,
@@ -990,6 +994,132 @@ export async function addBodyScan(
   bail(e3);
 
   return rowToBodyScan(inserted!, signed?.signedUrl ?? "");
+}
+
+/** Analyse déjà calculée pour une date de scan, si elle existe. */
+export async function getScanAnalysis(date: string): Promise<ScanAnalysis | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("scan_analyses")
+    .select("*")
+    .eq("date", date)
+    .maybeSingle();
+  if (error) return null; // table absente (migration 0006 pas passée) → pas d'analyse
+  if (!data) return null;
+  return {
+    date: data.date,
+    summary: data.summary,
+    developed: data.developed ?? [],
+    toWork: data.to_work ?? [],
+    posture: data.posture,
+    crossCheck: data.cross_check,
+    createdAt: data.created_at,
+  };
+}
+
+/**
+ * Envoie les photos d'un scan à Claude pour lecture visuelle, croisée avec
+ * le ledger. La photo transite par l'API le temps de l'appel ; rien n'est
+ * stocké hors du bucket privé.
+ */
+export async function analyzeScan(date: string): Promise<ScanAnalysis | null> {
+  const admin = supabaseAdmin();
+
+  const { data: rows, error } = await admin
+    .from("body_scans")
+    .select("angle, storage_path")
+    .eq("date", date);
+  bail(error);
+  if (!rows || rows.length === 0) return null;
+
+  // Téléchargement côté serveur : les photos ne transitent jamais par le
+  // navigateur pour cette opération.
+  const photos: ScanPhoto[] = [];
+  for (const row of rows) {
+    const { data: blob, error: e } = await admin.storage
+      .from(SCANS_BUCKET)
+      .download(row.storage_path as string);
+    if (e || !blob) continue;
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    photos.push({
+      angle: row.angle as string,
+      base64: buffer.toString("base64"),
+      mediaType: (row.storage_path as string).endsWith(".png")
+        ? "image/png"
+        : "image/jpeg",
+    });
+  }
+  if (photos.length === 0) return null;
+
+  const ledger = await buildLedgerSummary();
+  const result = await analyzeScanPhotos(photos, ledger);
+  if (!result) return null;
+
+  const { error: e2 } = await admin.from("scan_analyses").upsert(
+    {
+      date,
+      summary: result.summary,
+      developed: result.developed,
+      to_work: result.toWork,
+      posture: result.posture,
+      cross_check: result.crossCheck,
+    },
+    { onConflict: "date" },
+  );
+  bail(e2);
+
+  return {
+    date,
+    summary: result.summary,
+    developed: result.developed,
+    toWork: result.toWork,
+    posture: result.posture,
+    crossCheck: result.crossCheck,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Résumé texte du ledger d'entraînement — ce que l'IA croise avec la photo. */
+async function buildLedgerSummary(): Promise<string> {
+  const [logs, weighIns, profile] = await Promise.all([
+    listSetLogs(),
+    listWeighIns(),
+    getProfile(),
+  ]);
+
+  if (logs.length === 0) {
+    return "Aucune charge enregistrée pour l'instant — appuie-toi uniquement sur ce que tu vois, et dis-le.";
+  }
+
+  const bodyweight = weighIns[0]?.weightKg ?? null;
+  const zones = muscleZones(logs);
+  const tracked = trackedExercises(logs);
+
+  const lines: string[] = [];
+  if (bodyweight) lines.push(`Poids de corps : ${bodyweight} kg`);
+  if (profile.heightCm) lines.push(`Taille : ${profile.heightCm} cm`);
+  lines.push(`Objectif déclaré : ${profile.goal}`);
+
+  lines.push(
+    "\nVolume par muscle sur 28 jours (tonnage pondéré) :\n" +
+      zones
+        .map(
+          (z) =>
+            `- ${MUSCLES[z.muscle].label} : ${Math.round(z.tonnage)} kg (${z.status})`,
+        )
+        .join("\n"),
+  );
+
+  lines.push(
+    "\n1RM estimés (depuis séries réelles) :\n" +
+      tracked
+        .map(
+          (t) =>
+            `- ${t.exerciseKey} : ${t.e1rm.toFixed(1)} kg${t.stagnating ? " (stagnation)" : ""}`,
+        )
+        .join("\n"),
+  );
+
+  return lines.join("\n");
 }
 
 export async function deleteBodyScan(id: number): Promise<void> {
