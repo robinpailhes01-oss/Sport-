@@ -8,6 +8,7 @@
 
 import {
   EXERCISES,
+  MUSCLES,
   MUSCLE_KEYS,
   exerciseByKey,
   involvement,
@@ -264,4 +265,76 @@ export function trackedExercises(logs: SetLog[]): ExerciseStrength[] {
 export function untrackedExercises(logs: SetLog[]): string[] {
   const seen = new Set(logs.map((l) => l.exerciseKey));
   return EXERCISES.filter((e) => !seen.has(e.key)).map((e) => e.key);
+}
+
+export interface MuscleDetail {
+  muscle: MuscleKey;
+  zone: MuscleZone;
+  /** Exercices déjà pratiqués qui sollicitent ce muscle, du plus au moins contributeur */
+  feeders: { exerciseKey: string; tonnage: number; isPrimary: boolean }[];
+  /** Exercices du référentiel qui le travailleraient en moteur, jamais faits */
+  suggestions: string[];
+}
+
+/** Tout ce qu'on sait d'un muscle — alimente le panneau de détail de l'atlas. */
+export function muscleDetail(muscle: MuscleKey, logs: SetLog[], days = 28): MuscleDetail {
+  const zone =
+    muscleZones(logs, days).find((z) => z.muscle === muscle) ??
+    ({ muscle, tonnage: 0, share: 0, status: "entretenue" } as MuscleZone);
+
+  const byExercise = new Map<string, number>();
+  for (const log of logs) {
+    if (daysAgo(log.date) > days) continue;
+    const exercise = exerciseByKey(log.exerciseKey);
+    if (!exercise) continue;
+    const part = involvement(exercise, muscle);
+    if (part === 0) continue;
+    byExercise.set(
+      log.exerciseKey,
+      (byExercise.get(log.exerciseKey) ?? 0) + log.weightKg * log.reps * part,
+    );
+  }
+
+  const feeders = Array.from(byExercise.entries())
+    .map(([exerciseKey, tonnage]) => ({
+      exerciseKey,
+      tonnage,
+      isPrimary: exerciseByKey(exerciseKey)?.primary.includes(muscle) ?? false,
+    }))
+    .sort((a, b) => b.tonnage - a.tonnage);
+
+  const practiced = new Set(byExercise.keys());
+  const suggestions = EXERCISES.filter(
+    (e) => e.primary.includes(muscle) && !practiced.has(e.key),
+  )
+    .slice(0, 3)
+    .map((e) => e.key);
+
+  return { muscle, zone, feeders, suggestions };
+}
+
+/**
+ * La lecture d'ensemble : ce que l'atlas dit en une phrase. Retourne null
+ * tant qu'il n'y a pas assez de matière — mieux vaut se taire que meubler.
+ */
+export function atlasVerdict(logs: SetLog[], days = 28): string | null {
+  const zones = muscleZones(logs, days).filter((z) => z.tonnage > 0);
+  if (zones.length < 3) return null;
+
+  const sorted = [...zones].sort((a, b) => b.tonnage - a.tonnage);
+  const strongest = sorted[0];
+  const neglected = muscleZones(logs, days).filter((z) => z.status === "negligee");
+
+  const top = MUSCLES_LABEL(strongest.muscle);
+  if (neglected.length > 0) {
+    const names = neglected.slice(0, 3).map((z) => MUSCLES_LABEL(z.muscle));
+    return `${top} porte ton volume. ${names.join(", ")} ${neglected.length > 1 ? "restent" : "reste"} sans charge sur 4 semaines.`;
+  }
+
+  const weakest = sorted[sorted.length - 1];
+  return `${top} domine ton volume, ${MUSCLES_LABEL(weakest.muscle)} ferme la marche — écart de ${Math.round(strongest.tonnage / Math.max(1, weakest.tonnage))}×.`;
+}
+
+function MUSCLES_LABEL(muscle: MuscleKey): string {
+  return MUSCLES[muscle].label;
 }

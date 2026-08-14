@@ -516,6 +516,14 @@ export default function DashboardPage() {
                 </p>
               </Panel>
             </Link>
+            <Link href="/atlas" className="col-span-2 block">
+              <Panel tone="volt" className="p-3">
+                <p className="hud-label mb-1">Corps — zones fortes et faibles</p>
+                <p className="font-display text-xs font-bold uppercase tracking-wider text-volt">
+                  Atlas →
+                </p>
+              </Panel>
+            </Link>
           </div>
         </Rise>
 
