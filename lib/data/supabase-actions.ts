@@ -7,7 +7,7 @@ import { agentReplies, type CommsAuthor, type CommsMessage } from "@/lib/engine/
 import { callCommsAi } from "@/lib/ai/comms-client";
 import type { CommsAiContext } from "@/lib/ai/comms-types";
 import { analyzeScanPhotos, type ScanPhoto } from "@/lib/ai/scan-analysis";
-import { generateSession } from "@/lib/ai/session-generator";
+import { generateSession, generateMissionBatch } from "@/lib/ai/session-generator";
 import { MUSCLES } from "@/lib/engine/exercises";
 import { muscleZones, trackedExercises } from "@/lib/engine/strength";
 import {
@@ -23,6 +23,8 @@ import {
   STAT_KEYS,
   type AvatarState,
   type BodyScan,
+  type Mission,
+  type MissionStatus,
   type Equipment,
   type Goal,
   type OperatorProfile,
@@ -306,7 +308,23 @@ export async function completeRun(
     );
     bail(e2);
   }
+
+  await closeMissionForRun(run.id, "done");
   return run;
+}
+
+/**
+ * Referme la mission liée à un run. Silencieux si le run ne vient pas d'une
+ * mission (séance choisie à la main) ou si la table n'existe pas encore.
+ */
+async function closeMissionForRun(
+  runId: string,
+  status: "done" | "skipped",
+): Promise<void> {
+  await supabaseAdmin()
+    .from("generated_sessions")
+    .update({ status, closed_at: new Date().toISOString() })
+    .eq("run_id", runId);
 }
 
 export async function abandonRun(runId: string): Promise<Run> {
@@ -318,6 +336,12 @@ export async function abandonRun(runId: string): Promise<Run> {
     .update({ status: run.status, completed_at: run.completedAt })
     .eq("id", runId);
   bail(error);
+  // La mission repart en attente : abandonner un run ne doit pas effacer la
+  // séance de la file, elle reste à faire.
+  await supabaseAdmin()
+    .from("generated_sessions")
+    .update({ status: "pending", run_id: null })
+    .eq("run_id", runId);
   return run;
 }
 
@@ -1227,6 +1251,130 @@ export async function generateTodaySession(): Promise<{
   }
 
   return { template, rationale: generated.rationale, author: generated.author };
+}
+
+function rowToMission(r: Record<string, unknown>): Mission {
+  return {
+    id: r.id as string,
+    template: r.template as WorkoutTemplate,
+    rationale: r.rationale as string,
+    author: r.author as string,
+    status: (r.status as MissionStatus) ?? "pending",
+    runId: (r.run_id as string) ?? null,
+    priority: (r.priority as number) ?? 0,
+    createdAt: r.created_at as string,
+  };
+}
+
+/** La file : ce qu'il reste à faire, le plus prioritaire d'abord. */
+export async function listMissions(): Promise<Mission[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("generated_sessions")
+    .select("*")
+    .in("status", ["pending", "active"])
+    .order("priority", { ascending: false })
+    .order("created_at", { ascending: true });
+  if (error) return [];
+  return (data ?? []).map(rowToMission);
+}
+
+/** Missions déjà closes — utile pour voir ce qui a été fait ou écarté. */
+export async function listClosedMissions(): Promise<Mission[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("generated_sessions")
+    .select("*")
+    .in("status", ["done", "skipped"])
+    .order("closed_at", { ascending: false })
+    .limit(20);
+  if (error) return [];
+  return (data ?? []).map(rowToMission);
+}
+
+/** L'agent compose un lot de séances complémentaires à piocher. */
+export async function generateMissions(): Promise<Mission[]> {
+  const context = await buildOperatorContext();
+  const batch = await generateMissionBatch(context);
+  if (!batch) return [];
+
+  const stamp = Date.now().toString(36);
+  const rows = batch.missions.map((m, i) => {
+    const id = `msn-${stamp}-${i}`;
+    const template: WorkoutTemplate = {
+      id,
+      slug: id,
+      title: m.title,
+      type: m.type as WorkoutTemplate["type"],
+      durationMin: m.durationMin,
+      primaryStat: m.primaryStat as StatKey,
+      statWeights: m.statWeights as WorkoutTemplate["statWeights"],
+      baseXp: Math.round(m.durationMin * 2),
+      blocks: m.blocks.map((b) => ({
+        name: b.name,
+        detail: b.detail,
+        ...(b.exerciseKey ? { exerciseKey: b.exerciseKey } : {}),
+        ...(b.sets ? { sets: b.sets } : {}),
+        ...(b.repsTarget ? { repsTarget: b.repsTarget } : {}),
+      })),
+    };
+    return {
+      id,
+      date: new Date().toISOString().slice(0, 10),
+      template,
+      rationale: m.rationale,
+      author: m.author,
+      priority: m.priority,
+      status: "pending",
+    };
+  });
+
+  const { data, error } = await supabaseAdmin()
+    .from("generated_sessions")
+    .insert(rows)
+    .select("*");
+  if (error) {
+    throw new Error(
+      /generated_sessions|status|priority/.test(error.message)
+        ? "Table ou colonnes manquantes — lance les migrations 0007 et 0008."
+        : error.message,
+    );
+  }
+  return (data ?? []).map(rowToMission);
+}
+
+/**
+ * Un tap = la séance démarre. On tire les modifiers au tier standard et on
+ * lance dans la foulée : la file existe pour supprimer les étapes, pas pour
+ * en ajouter une.
+ */
+export async function launchMission(missionId: string): Promise<Run | null> {
+  const admin = supabaseAdmin();
+  const { data: mission, error } = await admin
+    .from("generated_sessions")
+    .select("*")
+    .eq("id", missionId)
+    .maybeSingle();
+  bail(error);
+  if (!mission) return null;
+
+  const run = await rollRun(missionId, 0);
+  const started = await startRun(run.id);
+
+  const { error: e2 } = await admin
+    .from("generated_sessions")
+    .update({ status: "active", run_id: started.id })
+    .eq("id", missionId);
+  bail(e2);
+
+  return started;
+}
+
+/** Écarte une mission sans la faire — elle sort de la file, sans dette. */
+export async function skipMission(missionId: string): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("generated_sessions")
+    .update({ status: "skipped", closed_at: new Date().toISOString() })
+    .eq("id", missionId);
+  bail(error);
 }
 
 /** Séances générées récemment — la plus récente en premier. */

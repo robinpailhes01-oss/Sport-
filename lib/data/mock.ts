@@ -16,6 +16,7 @@ import {
   STAT_KEYS,
   type AvatarState,
   type BodyScan,
+  type Mission,
   type OperatorProfile,
   type PersonalRecord,
   type Run,
@@ -852,6 +853,24 @@ export class MockDataSource implements DataSource {
   async listGeneratedSessions(): Promise<GeneratedSessionResult[]> {
     return [];
   }
+
+  async listMissions(): Promise<Mission[]> {
+    return [];
+  }
+
+  async listClosedMissions(): Promise<Mission[]> {
+    return [];
+  }
+
+  async generateMissions(): Promise<Mission[]> {
+    return [];
+  }
+
+  async launchMission(): Promise<Run | null> {
+    return null;
+  }
+
+  async skipMission(): Promise<void> {}
 
   private mustGetRun(runId: string): Run {
     const run = this.state.runs.find((r) => r.id === runId);

@@ -2,6 +2,7 @@ import type { CommsMessage } from "@/lib/engine/comms";
 import type {
   AvatarState,
   BodyScan,
+  Mission,
   OperatorProfile,
   PersonalRecord,
   Run,
@@ -151,5 +152,20 @@ export class SupabaseDataSource implements DataSource {
   }
   listGeneratedSessions(): Promise<GeneratedSessionResult[]> {
     return actions.listGeneratedSessions();
+  }
+  listMissions(): Promise<Mission[]> {
+    return actions.listMissions();
+  }
+  listClosedMissions(): Promise<Mission[]> {
+    return actions.listClosedMissions();
+  }
+  generateMissions(): Promise<Mission[]> {
+    return actions.generateMissions();
+  }
+  launchMission(missionId: string): Promise<Run | null> {
+    return actions.launchMission(missionId);
+  }
+  skipMission(missionId: string): Promise<void> {
+    return actions.skipMission(missionId);
   }
 }

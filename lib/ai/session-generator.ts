@@ -77,6 +77,69 @@ Choisis celui qui correspond au type de séance que tu programmes, et écris le 
 ## Ton
 Français, tutoiement, vocabulaire de jeu en anglais (run, flawless, PR). Prescriptions précises et chiffrées — jamais "fais quelques séries".`;
 
+export const MissionBatchSchema = z.object({
+  missions: z
+    .array(
+      GeneratedSessionSchema.extend({
+        priority: z
+          .number()
+          .int()
+          .min(0)
+          .max(10)
+          .describe(
+            "Urgence relative : 10 = à faire en priorité (zone très en retard, stagnation), 0 = confort.",
+          ),
+      }),
+    )
+    .min(3)
+    .max(5),
+});
+
+export type MissionBatch = z.infer<typeof MissionBatchSchema>;
+
+const BATCH_SYSTEM = `${SYSTEM}
+
+## Tu composes ici un LOT de séances, pas un planning
+L'opérateur est capitaine : ses journées sont imprévisibles, une journée en mer peut tomber n'importe quand. Un planning daté le mettrait en faute. Tu produis donc une FILE de 3 à 5 séances qu'il piochera quand il peut.
+
+Conséquences directes sur ce que tu écris :
+1. **Aucune référence à un jour de la semaine ni à un ordre imposé.** Chaque séance doit tenir debout seule.
+2. **Varie les durées** : au moins une séance courte (≤ 30 min) qui reste faisable un jour chargé ou à bord, et au moins une séance complète. Le jour où il n'a que 25 minutes, il doit avoir quelque chose à lancer.
+3. **Le lot doit être complémentaire** : ensemble, ces séances couvrent les zones en retard sans marteler le même groupe musculaire. Pas trois séances de jambes.
+4. **Priorise honnêtement** : la séance qui répare le plus gros déséquilibre prend la priorité la plus haute.
+5. Si le matériel est limité (bateau / minimal), au moins une séance doit être réalisable dans ce contexte.`;
+
+export async function generateMissionBatch(
+  context: string,
+): Promise<MissionBatch | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.parse({
+      model: "claude-opus-4-8",
+      max_tokens: 8192,
+      thinking: { type: "adaptive" },
+      output_config: {
+        effort: "high",
+        format: zodOutputFormat(MissionBatchSchema),
+      },
+      system: BATCH_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `## Référentiel d'exercices chargés disponibles\n${EXERCISES.map((e) => `- ${e.key} : ${e.label} (${e.pattern})`).join("\n")}\n\n## État de l'opérateur\n${context}\n\nCompose sa file de séances.`,
+        },
+      ],
+    });
+    return response.parsed_output ?? null;
+  } catch (err) {
+    console.error("[mission-batch]", err);
+    return null;
+  }
+}
+
 export async function generateSession(
   context: string,
 ): Promise<GeneratedSession | null> {

@@ -277,6 +277,24 @@ export interface SetLog {
   date: string;
 }
 
+export type MissionStatus = "pending" | "active" | "done" | "skipped";
+
+/** Une séance à faire, piochée quand tu peux — pas datée, pas en retard. */
+export interface Mission {
+  id: string;
+  template: WorkoutTemplate;
+  /** Pourquoi cette séance, dans la voix du coach qui la signe */
+  rationale: string;
+  /** goggins | robbins */
+  author: string;
+  status: MissionStatus;
+  /** Run lié une fois lancée */
+  runId: string | null;
+  /** Plus haut = plus urgent selon l'agent */
+  priority: number;
+  createdAt: string;
+}
+
 export type ScanAngle = "face" | "profil" | "dos";
 
 /** Lecture visuelle d'un scan par l'IA, croisée avec le ledger d'entraînement. */

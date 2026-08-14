@@ -27,6 +27,7 @@ import {
   STAT_KEYS,
   STATS,
   type AvatarState,
+  type Mission,
   type Run,
   type WorkoutTemplate,
 } from "@/lib/engine/types";
@@ -51,6 +52,11 @@ export default function DashboardPage() {
   const [trainingTime, setTrainingTime] = useState<string>("");
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [analystHeadline, setAnalystHeadline] = useState<string | null>(null);
+  const [queue, setQueue] = useState<Mission[]>([]);
+
+  const pendingMissions = queue.filter((m) => m.status === "pending");
+  const missionCount = pendingMissions.length;
+  const nextMission = pendingMissions[0] ?? null;
 
   const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -104,6 +110,7 @@ export default function DashboardPage() {
   useEffect(() => {
     db().getAvatar().then(setAvatar);
     db().listTemplates().then(setTemplates);
+    db().listMissions().then(setQueue);
     db()
       .getActiveRun()
       .then(async (run) => {
@@ -357,6 +364,37 @@ export default function DashboardPage() {
               </Button>
             </Link>
           )}
+        </Rise>
+
+        {/* ── LA FILE DE MISSIONS ── */}
+        <Rise>
+          <Link href="/missions" className="block">
+            <Panel tone={missionCount > 0 ? "volt" : "default"} className="p-4">
+              <div className="flex items-baseline justify-between">
+                <p className="hud-label">Missions à faire</p>
+                <span className="font-mono text-[10px] tracking-micro text-ink-mute">
+                  OUVRIR →
+                </span>
+              </div>
+              {missionCount > 0 ? (
+                <>
+                  <p className="mt-1 font-display text-3xl font-bold leading-none text-volt">
+                    {missionCount}
+                  </p>
+                  {nextMission && (
+                    <p className="mt-1.5 truncate font-mono text-[11px] text-ink-dim">
+                      Prochaine : {nextMission.template.title} ·{" "}
+                      {nextMission.template.durationMin}′
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="mt-1 text-xs leading-relaxed text-ink-dim">
+                  File vide — demande à tes coachs de la remplir.
+                </p>
+              )}
+            </Panel>
+          </Link>
         </Rise>
 
         {/* ── CETTE SEMAINE — toujours visible, même run en cours ── */}

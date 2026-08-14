@@ -2,6 +2,7 @@ import type { CommsMessage } from "@/lib/engine/comms";
 import type {
   AvatarState,
   BodyScan,
+  Mission,
   OperatorProfile,
   PersonalRecord,
   Run,
@@ -105,6 +106,16 @@ export interface DataSource {
   /** Un agent écrit la séance du jour depuis tout ce que l'app sait de toi */
   generateTodaySession(): Promise<GeneratedSessionResult | null>;
   listGeneratedSessions(): Promise<GeneratedSessionResult[]>;
+
+  /** La file de séances à faire — pas de date, pas de retard possible */
+  listMissions(): Promise<Mission[]>;
+  listClosedMissions(): Promise<Mission[]>;
+  /** L'agent compose un lot de séances complémentaires à piocher */
+  generateMissions(): Promise<Mission[]>;
+  /** Un tap : tire les modifiers et démarre le run dans la foulée */
+  launchMission(missionId: string): Promise<Run | null>;
+  /** Écarte une mission sans la faire */
+  skipMission(missionId: string): Promise<void>;
 }
 
 export interface GeneratedSessionResult {
